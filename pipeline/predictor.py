@@ -6,7 +6,7 @@ from services.model_service import ModelService
 from pipeline.feature_engineering import calculate_features
 
 class PredictorPipeline:
-    def __init__(self, model_path="best_model.pt", scaler_path="scalers.pkl", baselines_path="config/baselines.json"):
+    def __init__(self, model_path="model/best_model.pt", scaler_path="model/scalers.pkl", baselines_path="config/baselines.json"):
         self.model_path = model_path
         self.scaler_path = scaler_path
         self.baselines_path = baselines_path

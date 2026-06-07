@@ -21,15 +21,16 @@ def run_daily_pipeline(target_date_str=None):
         print(f"[ERROR] Gagal inisialisasi GEE Extractor: {e}")
         return
 
-    # 2. Tentukan tanggal target (Default: Mendeteksi tanggal terbaru ERA5 di GEE secara otomatis)
+    # 2. Tentukan tanggal target (Default: kemarin/H-1 secara kalender)
     if not target_date_str:
-        target_date_str = extractor.get_latest_era5_date()
+        yesterday = datetime.now() - timedelta(days=1)
+        target_date_str = yesterday.strftime('%Y-%m-%d')
     
     print(f"[Pipeline] Tanggal target pemrosesan: {target_date_str}")
     target_date = pd.to_datetime(target_date_str)
     
     # 3. Load Database Lokal
-    local_db_path = 'Dataset_Master_ERA5_Ready_LSTM.csv'
+    local_db_path = 'raw_data/Dataset_Master_ERA5_Ready_LSTM.csv'
     if not os.path.exists(local_db_path):
         raise FileNotFoundError(f"Database lokal '{local_db_path}' tidak ditemukan. Harap siapkan database master terlebih dahulu.")
         
@@ -89,8 +90,8 @@ def run_daily_pipeline(target_date_str=None):
 
     # 4. Inisialisasi Model Predictor
     predictor = PredictorPipeline(
-        model_path="best_model.pt",
-        scaler_path="scalers.pkl",
+        model_path="model/best_model.pt",
+        scaler_path="model/scalers.pkl",
         baselines_path="config/baselines.json"
     )
 

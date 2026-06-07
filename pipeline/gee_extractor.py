@@ -69,8 +69,22 @@ class GEEExtractor:
         
         size = era5_hourly.size().getInfo()
         if size == 0:
-            print(f"[GEE] [WARN] Tidak ada data ERA5 untuk tanggal {target_date_str}")
-            return pd.DataFrame()
+            print(f"[GEE] [WARN] Tidak ada data ERA5 untuk tanggal {target_date_str} di GEE. Menggunakan fallback dummy NaN.")
+            empty_list = []
+            features = self.jabar_regions.getInfo().get('features', [])
+            for feat in features:
+                kab_name = feat['properties']['ADM2_NAME']
+                empty_list.append({
+                    'date': target_date_str,
+                    'Kabupaten': self.clean_kabupaten_name(kab_name),
+                    'ERA5_LST_Mean': None,
+                    'ERA5_LST_Max': None,
+                    'ERA5_LST_Percentile95': None,
+                    'ERA5_Cloud_Cover_Percentage': 0,
+                    'ERA5_Max_Lon': None,
+                    'ERA5_Max_Lat': None
+                })
+            return pd.DataFrame(empty_list)
 
         # Rata-rata harian dan konversi Kelvin ke Celsius
         daily_mean = era5_hourly.mean().subtract(273.15).rename('LST_Day')

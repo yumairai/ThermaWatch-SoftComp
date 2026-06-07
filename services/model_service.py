@@ -93,7 +93,7 @@ class ANFIS_LSTM(nn.Module):
 # ============================================================
 
 class ModelService:
-    def __init__(self, model_path='outputs/best_model.pt', scaler_path='outputs/scalers.pkl'):
+    def __init__(self, model_path='model/best_model.pt', scaler_path='model/scalers.pkl'):
         self.model_path = model_path
         self.scaler_path = scaler_path
         
