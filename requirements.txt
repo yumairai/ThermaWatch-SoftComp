@@ -1,0 +1,11 @@
+gspread
+google-auth
+pandas
+numpy
+torch
+earthengine-api
+streamlit
+plotly
+folium
+streamlit-folium
+python-dotenv

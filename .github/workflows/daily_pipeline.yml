@@ -1,0 +1,59 @@
+name: ThermaWatch Daily Data Pipeline
+
+on:
+  schedule:
+    # Berjalan otomatis setiap hari pukul 18:00 UTC (atau pukul 01:00 WIB dini hari)
+    - cron: '0 18 * * *'
+  workflow_dispatch: # Memungkinkan Anda menjalankan pipeline ini secara manual lewat tombol di GitHub Web
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Unduh kode project dari repository ke runner GitHub
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    # 2. Siapkan Python versi 3.10 di server runner
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    # 3. Cache Python packages untuk mempercepat proses build berikutnya
+    - name: Cache Pip Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    # 4. Install semua library dari requirements.txt
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 5. Rekonstruksi file credentials.json secara temporer dari GitHub Secrets
+    - name: Setup Credentials File
+      run: |
+        mkdir -p config
+        echo '${{ secrets.GCP_SERVICE_ACCOUNT }}' > config/credentials.json
+
+    # 6. Jalankan Script Pipeline Utama
+    - name: Run Pipeline Script
+      run: |
+        python pipeline/run_daily_pipeline.py
+
+    # 7. Commit & Push perubahan database lokal (CSV) kembali ke repository GitHub Anda
+    - name: Commit and Push Updated Local CSV Database
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add Dataset_Master_ERA5_Ready_LSTM.csv
+        git commit -m "chore: auto-update local database for $(date +'%Y-%m-%d')" || exit 0
+        git push
