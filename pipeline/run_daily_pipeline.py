@@ -7,21 +7,28 @@ from datetime import datetime, timedelta
 from pipeline.gee_extractor import GEEExtractor
 from pipeline.predictor import PredictorPipeline
 from pipeline.spreadsheet_writer import SpreadsheetWriter
+from pipeline.feature_engineering import calculate_features
 
 def run_daily_pipeline(target_date_str=None):
     print("==============================================================")
     print("       MEMULAI DAILY PIPELINE RUN - THERMAWATCH AI            ")
     print("==============================================================")
 
-    # 1. Tentukan tanggal target (Default: kemarin/H-1 karena latensi rilis data satelit)
+    # 1. Inisialisasi GEE Extractor terlebih dahulu untuk memeriksa tanggal satelit
+    try:
+        extractor = GEEExtractor("config/credentials.json")
+    except Exception as e:
+        print(f"[ERROR] Gagal inisialisasi GEE Extractor: {e}")
+        return
+
+    # 2. Tentukan tanggal target (Default: Mendeteksi tanggal terbaru ERA5 di GEE secara otomatis)
     if not target_date_str:
-        yesterday = datetime.now() - timedelta(days=1)
-        target_date_str = yesterday.strftime('%Y-%m-%d')
+        target_date_str = extractor.get_latest_era5_date()
     
     print(f"[Pipeline] Tanggal target pemrosesan: {target_date_str}")
     target_date = pd.to_datetime(target_date_str)
     
-    # 2. Load Database Lokal
+    # 3. Load Database Lokal
     local_db_path = 'Dataset_Master_ERA5_Ready_LSTM.csv'
     if not os.path.exists(local_db_path):
         raise FileNotFoundError(f"Database lokal '{local_db_path}' tidak ditemukan. Harap siapkan database master terlebih dahulu.")
@@ -36,13 +43,6 @@ def run_daily_pipeline(target_date_str=None):
         print(f"[WARN] Tanggal {target_date_str} sudah ada di database lokal. Proses akan menimpa baris tersebut.")
         # Hapus baris lama tersebut untuk mencegah duplikasi
         df_db = df_db[df_db['date'] != target_date]
-
-    # 3. Ekstraksi Data dari GEE
-    try:
-        extractor = GEEExtractor("config/credentials.json")
-    except Exception as e:
-        print(f"[ERROR] Gagal inisialisasi GEE Extractor: {e}")
-        return
 
     # Tarik data cuaca, soil, ndvi, dan landsat untuk hari target
     df_era5 = extractor.extract_era5(target_date_str)
@@ -64,10 +64,28 @@ def run_daily_pipeline(target_date_str=None):
     if not df_landsat.empty:
         df_today = pd.merge(df_today, df_landsat, on=['date', 'Kabupaten'], how='left')
         
-    # Standarkan format data hari ini
+    # Standarkan format data hari ini dan ubah ke numerik agar bisa di-interpolate
     df_today['date'] = pd.to_datetime(df_today['date'])
     df_today['Kabupaten'] = df_today['Kabupaten'].str.lower().str.strip()
     df_today['month'] = df_today['date'].dt.month
+
+    # Konversi kolom-kolom satelit ke tipe float
+    numeric_cols = [
+        'ERA5_LST_Mean', 'ERA5_LST_Max', 'ERA5_LST_Percentile95', 
+        'SoilMoisture_Daily_Mean', 'NDVI_8Day_Mean', 
+        'LST_Mean', 'LST_Max', 'LST_Percentile95', 'Cloud_Cover_Percentage'
+    ]
+    for col in numeric_cols:
+        if col in df_today.columns:
+            df_today[col] = pd.to_numeric(df_today[col], errors='coerce')
+
+    # Deduplikasi poligon parsial kabupaten (merata-ratakan nilai LST/Soil, dan ambil koordinat pertama)
+    coord_cols = ['ERA5_Max_Lon', 'ERA5_Max_Lat']
+    mean_cols = [c for c in df_today.columns if c not in coord_cols and c not in ['date', 'Kabupaten']]
+    
+    df_today_unique = df_today.groupby(['date', 'Kabupaten'])[mean_cols].mean().reset_index()
+    df_today_coords = df_today.groupby(['date', 'Kabupaten'])[coord_cols].first().reset_index()
+    df_today = pd.merge(df_today_unique, df_today_coords, on=['date', 'Kabupaten'], how='left')
 
     # 4. Inisialisasi Model Predictor
     predictor = PredictorPipeline(
@@ -107,23 +125,47 @@ def run_daily_pipeline(target_date_str=None):
 
         # Jalankan kalkulasi fitur dan prediksi model ANFIS-LSTM
         try:
-            prediction_res = predictor.predict_kabupaten(df_30_days)
+            # Lakukan feature engineering terlebih dahulu untuk mendapatkan data ter-interpolasi & LST_Anomaly
+            df_processed = calculate_features(df_30_days, predictor.elevasi_dict, predictor.historical_means)
             
+            # Jalankan prediksi menggunakan data yang sudah siap
+            prediction_res = predictor.model_service.predict(
+                df_processed[['ERA5_LST_Mean', 'LST_Mean', 'LST_Anomaly']], 
+                {
+                    'Elevation_m': float(df_processed['Elevation_m'].iloc[-1]),
+                    'NDVI_8Day_Mean': float(df_processed['NDVI_8Day_Mean'].iloc[-1]),
+                    'SoilMoisture_Daily_Mean': float(df_processed['SoilMoisture_Daily_Mean'].iloc[-1])
+                }
+            )
+            
+            # Cari fallback koordinat jika hari ini NaN (ambil dari data historis terakhir yang valid)
+            latest_row = df_processed.iloc[-1]
+            lat_val = latest_row['ERA5_Max_Lat']
+            lon_val = latest_row['ERA5_Max_Lon']
+            
+            if pd.isna(lat_val) or lat_val < -90 or lat_val == -9999.0:
+                # Cari baris historis yang memiliki koordinat valid (bukan NaN atau -9999)
+                valid_hist_lat = df_hist[df_hist['ERA5_Max_Lat'].notna() & (df_hist['ERA5_Max_Lat'] > -90) & (df_hist['ERA5_Max_Lat'] != -9999.0)]
+                lat_val = valid_hist_lat['ERA5_Max_Lat'].iloc[-1] if not valid_hist_lat.empty else -7.0 # default jabar
+                
+            if pd.isna(lon_val) or lon_val < 0 or lon_val == -9999.0:
+                valid_hist_lon = df_hist[df_hist['ERA5_Max_Lon'].notna() & (df_hist['ERA5_Max_Lon'] > 0) & (df_hist['ERA5_Max_Lon'] != -9999.0)]
+                lon_val = valid_hist_lon['ERA5_Max_Lon'].iloc[-1] if not valid_hist_lon.empty else 107.6 # default jabar
+
             # Gabungkan input hari ini dengan output prediksi untuk disimpan
             kab_result = {
                 "date": target_date_str,
                 "Kabupaten": kab,
-                "LST_Mean": row_today['LST_Mean'].values[0] if 'LST_Mean' in row_today.columns else None,
-                "ERA5_LST_Mean": row_today['ERA5_LST_Mean'].values[0],
-                "SoilMoisture_Daily_Mean": row_today['SoilMoisture_Daily_Mean'].values[0] if 'SoilMoisture_Daily_Mean' in row_today.columns else None,
-                "NDVI_8Day_Mean": row_today['NDVI_8Day_Mean'].values[0] if 'NDVI_8Day_Mean' in row_today.columns else None,
-                "Elevation_m": predictor.elevasi_dict.get(kab, 300.0),
-                "month": int(row_today['month'].values[0]),
-                # LST_Anomaly dihitung di predictor
-                "LST_Anomaly": df_30_days['LST_Anomaly'].iloc[-1] if 'LST_Anomaly' in df_30_days.columns else 0.0,
+                "LST_Mean": latest_row['LST_Mean'],
+                "ERA5_LST_Mean": latest_row['ERA5_LST_Mean'],
+                "SoilMoisture_Daily_Mean": latest_row['SoilMoisture_Daily_Mean'],
+                "NDVI_8Day_Mean": latest_row['NDVI_8Day_Mean'],
+                "Elevation_m": latest_row['Elevation_m'],
+                "month": int(latest_row['month']),
+                "LST_Anomaly": latest_row['LST_Anomaly'],
                 "prediction": prediction_res["prediction"],
-                "ERA5_Max_Lat": row_today['ERA5_Max_Lat'].values[0],
-                "ERA5_Max_Lon": row_today['ERA5_Max_Lon'].values[0]
+                "ERA5_Max_Lat": float(lat_val),
+                "ERA5_Max_Lon": float(lon_val)
             }
             final_pipeline_outputs.append(kab_result)
         except Exception as e:

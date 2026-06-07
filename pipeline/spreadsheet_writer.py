@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from services.sheets_service import SheetsService
 from utils.status_classifier import classify_status
 
@@ -28,8 +29,7 @@ class SpreadsheetWriter:
             status_h7 = classify_status(h7_val) if h7_val is not None else "NaN"
             
             # Sesuaikan dengan schema tabel Google Sheets:
-            # date | kabupaten | lst_mean | modis_lst_mean | soil_moisture | elevation | ndvi | month | anomaly | h1 | h3 | h7 | status_h1 | status_h3 | status_h7 | lat | lon
-            row = [
+            raw_row = [
                 item.get("date"),
                 item.get("Kabupaten"),
                 item.get("LST_Mean") if pd.notna(item.get("LST_Mean")) else "NaN",
@@ -37,7 +37,7 @@ class SpreadsheetWriter:
                 item.get("SoilMoisture_Daily_Mean") if pd.notna(item.get("SoilMoisture_Daily_Mean")) else "NaN",
                 item.get("Elevation_m") if pd.notna(item.get("Elevation_m")) else "NaN",
                 item.get("NDVI_8Day_Mean") if pd.notna(item.get("NDVI_8Day_Mean")) else "NaN",
-                int(item.get("month")) if pd.notna(item.get("month")) else "NaN",
+                item.get("month") if pd.notna(item.get("month")) else "NaN",
                 item.get("LST_Anomaly") if pd.notna(item.get("LST_Anomaly")) else "NaN",
                 h1_val if h1_val is not None else "NaN",
                 h3_val if h3_val is not None else "NaN",
@@ -48,7 +48,20 @@ class SpreadsheetWriter:
                 item.get("ERA5_Max_Lat") if pd.notna(item.get("ERA5_Max_Lat")) else "NaN",
                 item.get("ERA5_Max_Lon") if pd.notna(item.get("ERA5_Max_Lon")) else "NaN"
             ]
-            rows_to_append.append(row)
+            
+            # Konversi semua tipe data numpy/pandas ke native Python types agar JSON serializable
+            cleaned_row = []
+            for val in raw_row:
+                if pd.isna(val) or val is None:
+                    cleaned_row.append("NaN")
+                elif isinstance(val, (integer_types := (int, np.integer))):
+                    cleaned_row.append(int(val))
+                elif isinstance(val, (float_types := (float, np.floating))):
+                    cleaned_row.append(float(val))
+                else:
+                    cleaned_row.append(str(val))
+                    
+            rows_to_append.append(cleaned_row)
             
         if rows_to_append:
             print(f"[Writer] Menyimpan {len(rows_to_append)} baris data ke Google Sheet...")

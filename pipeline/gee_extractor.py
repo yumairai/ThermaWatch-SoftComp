@@ -2,6 +2,7 @@ import ee
 import json
 import pandas as pd
 from google.oauth2.service_account import Credentials
+from datetime import datetime
 
 class GEEExtractor:
     def __init__(self, credentials_path="config/credentials.json"):
@@ -9,6 +10,25 @@ class GEEExtractor:
         self.project_id = None
         self.jabar_regions = None
         self.initialize_gee()
+
+    def get_latest_era5_date(self):
+        """Mencari tanggal terbaru yang tersedia di ImageCollection ERA5 di GEE."""
+        try:
+            # Ambil citra ERA5 paling akhir berdasarkan waktu sistem
+            era5_hourly = ee.ImageCollection("ECMWF/ERA5_LAND/HOURLY")
+            latest_image = era5_hourly.sort('system:time_start', False).first()
+            time_start = latest_image.get('system:time_start').getInfo()
+            
+            # Konversi milidetik timestamp ke string YYYY-MM-DD
+            latest_date_str = datetime.utcfromtimestamp(time_start / 1000.0).strftime('%Y-%m-%d')
+            print(f"[GEE] Tanggal terupdate ERA5 yang tersedia di server: {latest_date_str}")
+            return latest_date_str
+        except Exception as e:
+            # Fallback jika gagal (misal koneksi lambat), gunakan H-4 sebagai default aman
+            from datetime import timedelta
+            fallback_date = (datetime.now() - timedelta(days=4)).strftime('%Y-%m-%d')
+            print(f"[GEE] Gagal mendeteksi tanggal terbaru ERA5 secara otomatis, menggunakan fallback: {fallback_date}. Error: {e}")
+            return fallback_date
 
     def initialize_gee(self):
         """Inisialisasi koneksi ke Google Earth Engine menggunakan Service Account."""
@@ -49,7 +69,7 @@ class GEEExtractor:
         
         size = era5_hourly.size().getInfo()
         if size == 0:
-            print(f"[GEE] ⚠ Tidak ada data ERA5 untuk tanggal {target_date_str}")
+            print(f"[GEE] [WARN] Tidak ada data ERA5 untuk tanggal {target_date_str}")
             return pd.DataFrame()
 
         # Rata-rata harian dan konversi Kelvin ke Celsius
@@ -68,30 +88,40 @@ class GEEExtractor:
         # Ambil koordinat piksel terpanas
         def get_formatted_features(f):
             kab_name = f.get('ADM2_NAME')
-            lst_mean = f.get('LST_Day_mean')
-            lst_max = f.get('LST_Day_max')
-            lst_p95 = f.get('LST_Day_p95')
+            lst_mean = f.get('mean')
+            lst_max = f.get('max')
+            lst_p95 = f.get('p95')
             
-            # Sub-query koordinat piksel terpanas
-            max_pixel_mask = image_processed.select('LST_Day').geq(ee.Image.constant(lst_max).subtract(0.001))
-            max_pixel_coords = image_processed.select(['longitude', 'latitude']).updateMask(max_pixel_mask)
+            default_coords = ee.List([-9999.0, -9999.0])
             
-            coord_stats = max_pixel_coords.reduceRegion(
-                reducer=ee.Reducer.first(),
-                geometry=f.geometry(),
-                scale=9000,
-                maxPixels=1e9
-            )
+            # Sub-query koordinat piksel terpanas jika lst_max ada
+            def get_coords():
+                max_pixel_mask = image_processed.select('LST_Day').gte(ee.Image.constant(lst_max).subtract(0.001))
+                max_pixel_coords = image_processed.select(['longitude', 'latitude']).updateMask(max_pixel_mask)
+                coord_stats = max_pixel_coords.reduceRegion(
+                    reducer=ee.Reducer.first(),
+                    geometry=f.geometry(),
+                    scale=9000,
+                    maxPixels=1e9
+                )
+                return ee.List([coord_stats.get('longitude'), coord_stats.get('latitude')])
+            
+            # Jalankan sub-query hanya jika lst_max valid (tidak null)
+            coords_result = ee.List(ee.Algorithms.If(
+                lst_max,
+                get_coords(),
+                default_coords
+            ))
             
             return ee.Feature(None, {
                 'date': target_date_str,
                 'Kabupaten': kab_name,
-                'ERA5_LST_Mean': lst_mean,
-                'ERA5_LST_Max': lst_max,
-                'ERA5_LST_Percentile95': lst_p95,
+                'ERA5_LST_Mean': ee.Algorithms.If(lst_mean, lst_mean, -9999.0),
+                'ERA5_LST_Max': ee.Algorithms.If(lst_max, lst_max, -9999.0),
+                'ERA5_LST_Percentile95': ee.Algorithms.If(lst_p95, lst_p95, -9999.0),
                 'ERA5_Cloud_Cover_Percentage': 0, # ERA5 Bebas awan
-                'ERA5_Max_Lon': coord_stats.get('longitude'),
-                'ERA5_Max_Lat': coord_stats.get('latitude')
+                'ERA5_Max_Lon': coords_result.get(0),
+                'ERA5_Max_Lat': coords_result.get(1)
             })
 
         formatted_stats = stats.map(get_formatted_features)
@@ -117,7 +147,7 @@ class GEEExtractor:
                        .select('SoilMoi0_10cm_inst')
         
         if gldas_coll.size().getInfo() == 0:
-            print(f"[GEE] ⚠ Tidak ada data GLDAS untuk tanggal {target_date_str}")
+            print(f"[GEE] [WARN] Tidak ada data GLDAS untuk tanggal {target_date_str}")
             return pd.DataFrame()
 
         mean_img = gldas_coll.mean().rename('Soil_Moisture_Daily')
@@ -151,7 +181,7 @@ class GEEExtractor:
                       .filterDate(target_date.advance(-8, 'day'), target_date.advance(1, 'day'))
         
         if ndvi_coll.size().getInfo() == 0:
-            print(f"[GEE] ⚠ Tidak ada data MODIS NDVI untuk tanggal {target_date_str}")
+            print(f"[GEE] [WARN] Tidak ada data MODIS NDVI untuk tanggal {target_date_str}")
             return pd.DataFrame()
             
         # Ambil citra paling baru dalam rentang waktu tersebut

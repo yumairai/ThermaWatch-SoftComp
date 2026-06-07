@@ -1,1 +1,26 @@
+# Google Credentials (Sangat Rahasia)
 config/credentials.json
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints
+
+# Environment Variables
+.env
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# IDE / Editor Settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
