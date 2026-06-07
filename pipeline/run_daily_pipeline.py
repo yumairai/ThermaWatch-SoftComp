@@ -30,7 +30,7 @@ def run_daily_pipeline(target_date_str=None):
     target_date = pd.to_datetime(target_date_str)
     
     # 3. Load Database Lokal
-    local_db_path = 'raw_data/Dataset_Master_ERA5_Ready_LSTM.csv'
+    local_db_path = 'data/Dataset_Master_ERA5_Ready_LSTM.csv'
     if not os.path.exists(local_db_path):
         raise FileNotFoundError(f"Database lokal '{local_db_path}' tidak ditemukan. Harap siapkan database master terlebih dahulu.")
         
