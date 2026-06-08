@@ -15,11 +15,11 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    # 2. Siapkan Python versi 3.10 di server runner
+    # 2. Siapkan Python versi 3.11 di server runner
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: '3.11'
 
     # 3. Cache Python packages untuk mempercepat proses build berikutnya
     - name: Cache Pip Dependencies
