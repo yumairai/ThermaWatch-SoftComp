@@ -37,21 +37,22 @@ class PredictorPipeline:
             self.historical_means = data.get("historical_means", {})
             print("[Predictor] Berhasil memuat lookup table elevasi dan mean historis.")
 
-    def predict_kabupaten(self, df_30_days):
+    def predict_kabupaten(self, df_14_days):
         """
         Menjalankan prediksi untuk 1 Kabupaten.
-        df_30_days: DataFrame berisi 30 hari terakhir data satu kabupaten.
+        df_14_days: DataFrame berisi 14 hari terakhir data satu kabupaten.
         """
-        if len(df_30_days) != 30:
-            raise ValueError(f"Data input harus tepat berdurasi 30 hari. Ditemukan: {len(df_30_days)} baris.")
+        if len(df_14_days) != 14:
+            raise ValueError(f"Data input harus tepat berdurasi 14 hari. Ditemukan: {len(df_14_days)} baris.")
         
         # Feature Engineering
-        df_processed = calculate_features(df_30_days, self.elevasi_dict, self.historical_means)
+        df_processed = calculate_features(df_14_days, self.elevasi_dict, self.historical_means, is_modis=self.model_service.is_modis)
         
-        # Siapkan window data dinamis (30 baris)
-        df_window = df_processed[['ERA5_LST_Mean', 'LST_Mean', 'LST_Anomaly']]
+        # Siapkan window data dinamis (14 baris)
+        main_lst_col = 'MODIS_LST_Mean' if self.model_service.is_modis else 'ERA5_LST_Mean'
+        df_window = df_processed[[main_lst_col, 'LST_Mean', 'LST_Anomaly']]
         
-        # Siapkan fitur statis terasosiasi hari terakhir (baris ke-30)
+        # Siapkan fitur statis terasosiasi hari terakhir (baris ke-14)
         latest_row = df_processed.iloc[-1]
         df_static = {
             'Elevation_m': float(latest_row['Elevation_m']),

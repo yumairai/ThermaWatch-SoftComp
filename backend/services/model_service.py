@@ -97,6 +97,9 @@ class ModelService:
         self.model_path = model_path
         self.scaler_path = scaler_path
         
+        # Deteksi otomatis tipe model dari nama file
+        self.is_modis = 'modis' in model_path.lower()
+        
         self.model = None
         self.scaler_dyn = None
         self.scaler_stat = None
@@ -142,7 +145,7 @@ class ModelService:
         Menjalankan prediksi anomali geothermal h+1, h+3, h+7.
         
         Parameter:
-        - df_window: DataFrame berisi 30 hari data historis berurutan dengan kolom:
+        - df_window: DataFrame berisi 14 hari data historis berurutan dengan kolom:
                      ['ERA5_LST_Mean', 'LST_Mean', 'LST_Anomaly']
         - df_static: DataFrame/Series/Dict berisi fitur statis saat ini dengan kolom:
                      ['Elevation_m', 'NDVI_8Day_Mean', 'SoilMoisture_Daily_Mean']
@@ -150,12 +153,13 @@ class ModelService:
         Return:
         - dict: Berisi estimasi nilai anomali dan estimasi suhu riil (°C) untuk H+1, H+3, H+7
         """
-        # Pastikan input memiliki jumlah baris lookback yang sesuai (30 hari)
-        if len(df_window) != 30:
-            raise ValueError(f"Data historis dinamis harus berjumlah 30 baris (ditemukan {len(df_window)}).")
+        # Pastikan input memiliki jumlah baris lookback yang sesuai (14 hari)
+        if len(df_window) != 14:
+            raise ValueError(f"Data historis dinamis harus berjumlah 14 baris (ditemukan {len(df_window)}).")
             
         # 1. Ekstrak data array
-        dynamic_cols = ['ERA5_LST_Mean', 'LST_Mean', 'LST_Anomaly']
+        main_lst_col = 'MODIS_LST_Mean' if self.is_modis else 'ERA5_LST_Mean'
+        dynamic_cols = [main_lst_col, 'LST_Mean', 'LST_Anomaly']
         static_cols = ['Elevation_m', 'NDVI_8Day_Mean', 'SoilMoisture_Daily_Mean']
         
         x_dyn_raw = df_window[dynamic_cols].values
@@ -197,3 +201,78 @@ class ModelService:
                 }
             }
         }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS UNTUK STREAMLIT SIMULATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_model_service(is_modis=False):
+    """Mengembalikan ModelService yang sesuai dengan tipe sensor (cached)."""
+    # Gunakan path relatif yang aman dari mana saja script dipanggil
+    model_dir = "backend/model" if os.path.exists("backend/model") else "model"
+    
+    if is_modis:
+        model_path = f"{model_dir}/best_model_modis.pt"
+        scaler_path = f"{model_dir}/scalers_modis.pkl"
+    else:
+        model_path = f"{model_dir}/best_model.pt"
+        scaler_path = f"{model_dir}/scalers.pkl"
+        
+    return ModelService(model_path=model_path, scaler_path=scaler_path)
+
+
+def predict_future(kabupaten, lst_mean, soil_moisture, ndvi, elevation, month, is_modis=False):
+    """
+    Melakukan prediksi what-if untuk simulasi data buatan di Streamlit.
+    """
+    # 1. Ambil historical mean untuk menghitung anomali
+    config_dir = "backend/config" if os.path.exists("backend/config") else "config"
+    baselines_path = f"{config_dir}/baselines.json"
+    
+    hist_mean = lst_mean  # fallback jika tidak ada config
+    if os.path.exists(baselines_path):
+        try:
+            with open(baselines_path, "r") as f:
+                baselines = json.load(f)
+            hist_means_dict = baselines.get("historical_means", {})
+            kab_means = hist_means_dict.get(kabupaten.lower().strip(), {})
+            hist_mean = kab_means.get(str(int(month)), lst_mean)
+        except Exception as e:
+            print(f"[Simulation Helper] Gagal memuat baselines: {e}")
+            
+    anomaly = lst_mean - hist_mean
+    
+    # 2. Buat data run dinamis 14 hari dengan nilai konstan
+    main_lst_col = 'MODIS_LST_Mean' if is_modis else 'ERA5_LST_Mean'
+    data_dyn = {
+        main_lst_col: [lst_mean] * 14,
+        'LST_Mean': [lst_mean] * 14,
+        'LST_Anomaly': [anomaly] * 14
+    }
+    df_window = pd.DataFrame(data_dyn)
+    
+    # 3. Fitur statis
+    df_static = {
+        'Elevation_m': elevation,
+        'NDVI_8Day_Mean': ndvi,
+        'SoilMoisture_Daily_Mean': soil_moisture
+    }
+    
+    # 4. Inisialisasi service model
+    import json # pastikan json ter-import di modul
+    service = get_model_service(is_modis=is_modis)
+    
+    # 5. Prediksi
+    pred_res = service.predict(df_window, df_static)
+    pred_data = pred_res["prediction"]
+    
+    anom_h1 = pred_data["H1"]["anomaly_temp"]
+    anom_h3 = pred_data["H3"]["anomaly_temp"]
+    anom_h7 = pred_data["H7"]["anomaly_temp"]
+    
+    return {
+        "h1": float(anom_h1 + hist_mean),
+        "h3": float(anom_h3 + hist_mean),
+        "h7": float(anom_h7 + hist_mean)
+    }

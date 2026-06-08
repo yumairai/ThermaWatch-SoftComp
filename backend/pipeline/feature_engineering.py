@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
 
-def calculate_features(df_window, elevasi_dict, historical_means):
+def calculate_features(df_window, elevasi_dict, historical_means, is_modis=False):
     """
-    Melakukan feature engineering pada data 30 hari terakhir:
+    Melakukan feature engineering pada data 14/30 hari terakhir:
     - Interpolasi linear data Landsat (LST_Mean) yang kosong
     - Mengisi data NDVI dan Soil Moisture dengan interpolasi/forward fill
     - Menghitung LST_Anomaly berdasarkan rata-rata historis bulanan
@@ -45,7 +45,8 @@ def calculate_features(df_window, elevasi_dict, historical_means):
     numeric_cols = [
         'ERA5_LST_Mean', 'ERA5_LST_Max', 'ERA5_LST_Percentile95', 
         'LST_Mean', 'LST_Max', 'LST_Percentile95', 
-        'SoilMoisture_Daily_Mean', 'NDVI_8Day_Mean', 'Cloud_Cover_Percentage'
+        'SoilMoisture_Daily_Mean', 'NDVI_8Day_Mean', 'Cloud_Cover_Percentage',
+        'MODIS_LST_Mean', 'MODIS_LST_Max', 'MODIS_LST_Percentile95', 'MODIS_Data_Availability', 'MODIS_QC_Raw'
     ]
     for col in numeric_cols:
         if col in df.columns:
@@ -55,11 +56,14 @@ def calculate_features(df_window, elevasi_dict, historical_means):
     # 3. Hitung LST_Anomaly berbasis lookup month
     kab_means = historical_means.get(kabupaten, {})
     
+    # Tentukan kolom acuan utama untuk anomali
+    base_col = 'MODIS_LST_Mean' if is_modis else 'ERA5_LST_Mean'
+    
     def get_historical_mean(row):
         month_str = str(int(row['month']))
-        return kab_means.get(month_str, float(row['ERA5_LST_Mean']))  # fallback jika tidak ada
+        return kab_means.get(month_str, float(row[base_col]))  # fallback jika tidak ada
 
     df['LST_Historical_Mean'] = df.apply(get_historical_mean, axis=1)
-    df['LST_Anomaly'] = df['ERA5_LST_Mean'] - df['LST_Historical_Mean']
+    df['LST_Anomaly'] = df[base_col] - df['LST_Historical_Mean']
     
     return df

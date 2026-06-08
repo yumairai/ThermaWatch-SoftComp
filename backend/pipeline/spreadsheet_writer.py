@@ -8,7 +8,7 @@ class SpreadsheetWriter:
         self.spreadsheet_name = spreadsheet_name
         self.sheets_service = SheetsService(credentials_path=credentials_path)
         
-        # Definisi skema kolom baru yang rapi dan lengkap
+        # Definisi skema kolom baru yang rapi dan lengkap untuk ERA5
         self.headers = [
             "date", "kabupaten", "lst_mean", "lst_max", "lst_p95", "cloud_cover",
             "era5_lst_mean", "era5_lst_max", "era5_lst_p95", "soil_moisture",
@@ -18,10 +18,21 @@ class SpreadsheetWriter:
             "status_h1", "status_h3", "status_h7", "lat", "lon"
         ]
 
-    def write_predictions(self, final_results, sheet_name="daily_data"):
+        # Definisi skema kolom baru untuk MODIS
+        self.headers_modis = [
+            "date", "kabupaten", "lst_mean", "lst_max", "lst_p95", "cloud_cover",
+            "modis_lst_mean", "modis_lst_max", "modis_lst_p95", "soil_moisture",
+            "elevation", "ndvi", "month", "lst_historical_mean", "lst_anomaly",
+            "prediksi_anomali_h1", "prediksi_anomali_h3", "prediksi_anomali_h7",
+            "prediksi_suhu_h1", "prediksi_suhu_h3", "prediksi_suhu_h7",
+            "status_h1", "status_h3", "status_h7", "lat", "lon"
+        ]
+
+    def write_predictions(self, final_results, sheet_name="daily_data", is_modis=False):
         """
         Format dan tulis data hasil gabungan ekstraksi & prediksi ke Google Sheets dengan skema lengkap.
         """
+        active_headers = self.headers_modis if is_modis else self.headers
         rows_to_append = []
         
         for item in final_results:
@@ -34,8 +45,8 @@ class SpreadsheetWriter:
             # 2. Ambil nilai suhu normal bulanan historis
             hist_mean = item.get("LST_Historical_Mean", None)
             if hist_mean is None:
-                # Fallback ambil dari ERA5_LST_Mean - LST_Anomaly jika tidak ada
-                lst_now = item.get("ERA5_LST_Mean", None)
+                # Fallback ambil dari LST_Mean - LST_Anomaly jika tidak ada
+                lst_now = item.get("MODIS_LST_Mean" if is_modis else "ERA5_LST_Mean", None)
                 lst_anom = item.get("LST_Anomaly", None)
                 if lst_now is not None and lst_anom is not None:
                     hist_mean = lst_now - lst_anom
@@ -55,6 +66,13 @@ class SpreadsheetWriter:
             status_h3 = classify_status(anom_h3) if anom_h3 is not None else "NaN"
             status_h7 = classify_status(anom_h7) if anom_h7 is not None else "NaN"
             
+            main_lst_mean = item.get("MODIS_LST_Mean") if is_modis else item.get("ERA5_LST_Mean")
+            main_lst_max = item.get("MODIS_LST_Max") if is_modis else item.get("ERA5_LST_Max")
+            main_lst_p95 = item.get("MODIS_LST_Percentile95") if is_modis else item.get("ERA5_LST_Percentile95")
+            
+            lat_val = item.get("MODIS_Max_Lat") if is_modis else item.get("ERA5_Max_Lat")
+            lon_val = item.get("MODIS_Max_Lon") if is_modis else item.get("ERA5_Max_Lon")
+
             # 5. Susun mentah baris data sesuai urutan header
             raw_row = [
                 item.get("date"),
@@ -63,9 +81,9 @@ class SpreadsheetWriter:
                 item.get("LST_Max") if pd.notna(item.get("LST_Max")) else "NaN",
                 item.get("LST_Percentile95") if pd.notna(item.get("LST_Percentile95")) else "NaN",
                 item.get("Cloud_Cover_Percentage") if pd.notna(item.get("Cloud_Cover_Percentage")) else "NaN",
-                item.get("ERA5_LST_Mean") if pd.notna(item.get("ERA5_LST_Mean")) else "NaN",
-                item.get("ERA5_LST_Max") if pd.notna(item.get("ERA5_LST_Max")) else "NaN",
-                item.get("ERA5_LST_Percentile95") if pd.notna(item.get("ERA5_LST_Percentile95")) else "NaN",
+                main_lst_mean if pd.notna(main_lst_mean) else "NaN",
+                main_lst_max if pd.notna(main_lst_max) else "NaN",
+                main_lst_p95 if pd.notna(main_lst_p95) else "NaN",
                 item.get("SoilMoisture_Daily_Mean") if pd.notna(item.get("SoilMoisture_Daily_Mean")) else "NaN",
                 item.get("Elevation_m") if pd.notna(item.get("Elevation_m")) else "NaN",
                 item.get("NDVI_8Day_Mean") if pd.notna(item.get("NDVI_8Day_Mean")) else "NaN",
@@ -81,8 +99,8 @@ class SpreadsheetWriter:
                 status_h1,
                 status_h3,
                 status_h7,
-                item.get("ERA5_Max_Lat") if pd.notna(item.get("ERA5_Max_Lat")) else "NaN",
-                item.get("ERA5_Max_Lon") if pd.notna(item.get("ERA5_Max_Lon")) else "NaN"
+                lat_val if pd.notna(lat_val) else "NaN",
+                lon_val if pd.notna(lon_val) else "NaN"
             ]
             
             # 6. Konversi ke native Python types agar JSON serializable
@@ -103,8 +121,16 @@ class SpreadsheetWriter:
             # Hapus data duplikat untuk tanggal yang sama di Google Sheets jika ada
             try:
                 sheet = self.sheets_service.get_worksheet(self.spreadsheet_name, sheet_name)
-                # Ambil seluruh isi kolom pertama (tanggal)
-                col_dates = sheet.col_values(1)
+                
+                # Jika sheet baru dibuat (tidak memiliki baris/header kosong), sisipkan header terlebih dahulu
+                first_row = sheet.row_values(1)
+                if not first_row:
+                    print(f"[Writer] Menulis header kolom baru di sheet '{sheet_name}'...")
+                    sheet.insert_row(active_headers, 1)
+                    col_dates = []
+                else:
+                    # Ambil seluruh isi kolom pertama (tanggal)
+                    col_dates = sheet.col_values(1)
                 
                 # Himpunan tanggal yang akan ditulis baru
                 dates_to_delete = set(item.get("date") for item in final_results if item.get("date"))
@@ -133,7 +159,7 @@ class SpreadsheetWriter:
                     ranges.append((start, end))
                     
                     for s, e in ranges:
-                        sheet.delete_rows(s, e)
+                         sheet.delete_rows(s, e)
                     print("[Writer] Pembersihan data lama selesai.")
             except Exception as e:
                 print(f"[Writer] [WARN] Gagal membersihkan baris duplikat di Google Sheets: {e}")

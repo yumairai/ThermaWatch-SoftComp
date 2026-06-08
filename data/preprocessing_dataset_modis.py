@@ -8,7 +8,7 @@ print("=== MEMULAI PREPROCESSING DATA THERMAWATCH (BASELINE: MODIS LST) ===\n")
 # 1. LOAD DATASET DAN BASELINE ELEVASI
 # =========================================================================
 print("1. Memuat file CSV...")
-df_modis_lst = pd.read_csv('raw_data/MODIS_LST_Jabar_AntiBias_Daily.csv')
+df_modis_lst = pd.read_csv('raw_data/MODIS_LST_Jabar_Daily_Raw.csv')
 df_landsat = pd.read_csv('raw_data/Landsat8_Jabar_Satelit_Lintasan_Only.csv') 
 df_soil = pd.read_csv('raw_data/GLDAS_SoilMoisture_Jabar_Daily.csv')
 df_lama = pd.read_csv('raw_data/Fitur_Lengkap_Geothermal_Jabar_2014_2026.csv')
@@ -72,13 +72,21 @@ df_soil = df_soil.dropna(subset=['date'])
 df_rain = df_rain.dropna(subset=['date']) if not df_rain.empty else df_rain
 
 # =========================================================================
-# 4. FILTERING OUTLIER EKSTREM LANDSAT & CLEANSING DATA MODIS KOSONG (-9999)
+# 4. FILTERING OUTLIER EKSTREM LANDSAT & CLEANSING DATA MODIS KOSONG / BERAWAN
 # =========================================================================
 # Filter outlier ekstrim Landsat tetap dipertahankan
 invalid_landsat = (df_landsat['LST_Mean'] < 10) | (df_landsat['LST_Mean'] > 65)
 df_landsat.loc[invalid_landsat, ['LST_Mean', 'LST_Max', 'LST_Percentile95']] = np.nan
 if 'Max_Lon' in df_landsat.columns:
     df_landsat = df_landsat.drop(columns=['Max_Lon', 'Max_Lat'])
+
+# Filter Awan MODIS: Jika data_availability < 20% (tutupan awan > 80%), kita anggap LST hari itu tidak valid (set to NaN)
+availability_threshold = 0.20
+if 'MODIS_Data_Availability' in df_modis_lst.columns:
+    print(f"   Menerapkan filter awan MODIS (Threshold ketersediaan piksel bersih minimum: {availability_threshold*100}%)")
+    cloudy_mask = df_modis_lst['MODIS_Data_Availability'] < availability_threshold
+    modis_cols = ['MODIS_LST_Mean', 'MODIS_LST_Max', 'MODIS_LST_Percentile95']
+    df_modis_lst.loc[cloudy_mask, modis_cols] = np.nan
 
 # Tambahan Pengaman: Jika ada koordinat atau nilai MODIS bernilai -9999, ubah ke NaN agar diisi bfill/ffill otomatis
 for col in ['MODIS_LST_Mean', 'MODIS_LST_Max', 'MODIS_LST_Percentile95', 'MODIS_Max_Lon', 'MODIS_Max_Lat']:

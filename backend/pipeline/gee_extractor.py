@@ -340,4 +340,63 @@ class GEEExtractor:
         if gfs_dfs:
             return pd.concat(gfs_dfs, ignore_index=True)
         return pd.DataFrame()
+    def extract_modis(self, target_date_str):
+        """Mengekstrak MODIS LST harian (MOD11A1) untuk satu tanggal."""
+        print(f"[GEE] Mengekstrak MODIS LST untuk tanggal: {target_date_str}")
+        start_date = ee.Date(target_date_str)
+        end_date = start_date.advance(1, 'day')
+        
+        modis = ee.ImageCollection("MODIS/061/MOD11A1") \
+                  .filterBounds(self.jabar_regions) \
+                  .filterDate(start_date, end_date) \
+                  .select(['LST_Day_1km', 'QC_Day'])
+                  
+        if modis.size().getInfo() == 0:
+            print(f"[GEE] [WARN] Tidak ada data MODIS untuk tanggal {target_date_str}")
+            empty_list = []
+            features = self.jabar_regions.getInfo().get('features', [])
+            for feat in features:
+                kab_name = feat['properties']['ADM2_NAME']
+                empty_list.append({
+                    'date': target_date_str,
+                    'Kabupaten': self.clean_kabupaten_name(kab_name),
+                    'MODIS_LST_Mean': None,
+                    'MODIS_LST_Max': None,
+                    'MODIS_LST_Percentile95': None,
+                    'MODIS_Data_Availability': 0.0,
+                    'MODIS_QC_Raw': None
+                })
+            return pd.DataFrame(empty_list)
+
+        first_img = modis.first()
+        daily_lst = first_img.select('LST_Day_1km').multiply(0.02).subtract(273.15).rename('LST_Day')
+        qc_img = first_img.select('QC_Day').rename('QC_Day')
+        valid_mask = daily_lst.select('LST_Day').mask().rename('valid_fraction')
+        
+        image_processed = daily_lst.addBands(qc_img).addBands(valid_mask)
+        
+        stats = image_processed.reduceRegions(
+            collection=self.jabar_regions,
+            reducer=ee.Reducer.mean() \
+                     .combine(ee.Reducer.max(), None, True) \
+                     .combine(ee.Reducer.percentile([95]), None, True),
+            scale=1000
+        )
+        
+        features = stats.getInfo().get('features', [])
+        data_list = []
+        for feat in features:
+            props = feat['properties']
+            data_list.append({
+                'date': target_date_str,
+                'Kabupaten': self.clean_kabupaten_name(props.get('ADM2_NAME')),
+                'MODIS_LST_Mean': props.get('mean', None),
+                'MODIS_LST_Max': props.get('max', None),
+                'MODIS_LST_Percentile95': props.get('p95', None),
+                'MODIS_Data_Availability': props.get('mean_2', 0.0) if 'mean_2' in props else props.get('valid_fraction_mean', 0.0),
+                'MODIS_QC_Raw': props.get('mean_1', None) if 'mean_1' in props else props.get('QC_Day_mean', None)
+            })
+            
+        return pd.DataFrame(data_list)
+
 
