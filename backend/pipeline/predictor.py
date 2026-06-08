@@ -22,12 +22,16 @@ class PredictorPipeline:
 
     def load_baselines(self):
         """Memuat data elevasi dan rata-rata historis bulanan per kabupaten."""
-        if not os.path.exists(self.baselines_path):
+        resolved_path = self.baselines_path
+        if not os.path.exists(resolved_path) and os.path.exists(os.path.join("backend", resolved_path)):
+            resolved_path = os.path.join("backend", resolved_path)
+
+        if not os.path.exists(resolved_path):
             # Jika file baselines belum dibuat, buat default kosong/nanti diisi oleh script pembuat
-            print(f"[WARN] File baselines tidak ditemukan di {self.baselines_path}. Harap jalankan script pembuat baseline.")
+            print(f"[WARN] File baselines tidak ditemukan di {self.baselines_path} atau {resolved_path}. Harap jalankan script pembuat baseline.")
             return
 
-        with open(self.baselines_path, 'r') as f:
+        with open(resolved_path, 'r') as f:
             data = json.load(f)
             self.elevasi_dict = data.get("elevasi", {})
             self.historical_means = data.get("historical_means", {})

@@ -108,22 +108,30 @@ class ModelService:
 
     def load_artifacts(self):
         """Memuat file model .pt dan file scaler .pkl."""
+        resolved_scaler_path = self.scaler_path
+        if not os.path.exists(resolved_scaler_path) and os.path.exists(os.path.join("backend", resolved_scaler_path)):
+            resolved_scaler_path = os.path.join("backend", resolved_scaler_path)
+
+        resolved_model_path = self.model_path
+        if not os.path.exists(resolved_model_path) and os.path.exists(os.path.join("backend", resolved_model_path)):
+            resolved_model_path = os.path.join("backend", resolved_model_path)
+
         # 1. Load Scalers
-        if not os.path.exists(self.scaler_path):
-            raise FileNotFoundError(f"File scaler tidak ditemukan di {self.scaler_path}. Pastikan sudah di-upload.")
+        if not os.path.exists(resolved_scaler_path):
+            raise FileNotFoundError(f"File scaler tidak ditemukan di {self.scaler_path} atau {resolved_scaler_path}. Pastikan sudah di-upload.")
             
-        with open(self.scaler_path, 'rb') as f:
+        with open(resolved_scaler_path, 'rb') as f:
             scalers = pickle.load(f)
             self.scaler_dyn = scalers['scaler_dyn']
             self.scaler_stat = scalers['scaler_stat']
             self.scaler_y = scalers['scaler_y']
             
         # 2. Load Model Weights
-        if not os.path.exists(self.model_path):
-            raise FileNotFoundError(f"File model tidak ditemukan di {self.model_path}. Pastikan sudah di-upload.")
+        if not os.path.exists(resolved_model_path):
+            raise FileNotFoundError(f"File model tidak ditemukan di {self.model_path} atau {resolved_model_path}. Pastikan sudah di-upload.")
             
         self.model = ANFIS_LSTM()
-        checkpoint = torch.load(self.model_path, map_location=self.device)
+        checkpoint = torch.load(resolved_model_path, map_location=self.device)
         state_dict = checkpoint['model_state'] if 'model_state' in checkpoint else checkpoint
         self.model.load_state_dict(state_dict)
         self.model.to(self.device)
