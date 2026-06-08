@@ -9,6 +9,8 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     # 1. Unduh kode project dari repository ke runner GitHub
@@ -56,4 +58,4 @@ jobs:
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add data/Dataset_Master_ERA5_Ready_LSTM.csv
         git commit -m "chore: auto-update local database for $(date +'%Y-%m-%d')" || exit 0
-        git push
+        git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
