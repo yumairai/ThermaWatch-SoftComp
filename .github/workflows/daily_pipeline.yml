@@ -9,6 +9,8 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     # 1. Unduh kode project dari repository ke runner GitHub
