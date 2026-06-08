@@ -45,7 +45,7 @@ jobs:
     # 6. Jalankan Script Pipeline Utama
     - name: Run Pipeline Script
       run: |
-        python pipeline/run_daily_pipeline.py
+        python -m pipeline.run_daily_pipeline
 
     # 7. Commit & Push perubahan database lokal (CSV) kembali ke repository GitHub Anda
     - name: Commit and Push Updated Local CSV Database
