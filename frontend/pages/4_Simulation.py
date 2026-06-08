@@ -8,14 +8,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from services.model_service import predict_future
-
-# ─── Konfigurasi Halaman ──────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="ThermaWatch | Simulasi",
-    page_icon="🧪",
-    layout="wide",
-)
+from backend.services.model_service import ModelService
 
 # ─── CSS Kustom ───────────────────────────────────────────────────────────────
 st.markdown("""
@@ -118,12 +111,12 @@ def render_input_form() -> dict:
             help="Rata-rata Land Surface Temperature hasil observasi.",
         )
         soil_moisture = st.slider(
-            "Soil Moisture (m³/m³)",
+            "Soil Moisture (%)",
             min_value=0.0,
-            max_value=1.0,
-            value=0.3,
-            step=0.01,
-            help="Kandungan air tanah volumetrik.",
+            max_value=100.0,
+            value=30.0,
+            step=0.5,
+            help="Kandungan air tanah volumetrik (persentase).",
         )
 
     with col2:
@@ -166,33 +159,85 @@ def render_input_form() -> dict:
 
 
 def run_prediction(params: dict) -> dict | None:
-    """
-    Memanggil predict_future dan mengembalikan hasil prediksi.
-    Returns dict {h1, h3, h7} atau None jika gagal.
-    """
     try:
-        result = predict_future(
-            kabupaten=params["kabupaten"],
-            lst_mean=params["lst_mean"],
-            soil_moisture=params["soil_moisture"],
-            ndvi=params["ndvi"],
-            elevation=params["elevation"],
-            month=params["month"],
+        service = ModelService()
+
+        # Load data master ERA5 (cached per session)
+        from pathlib import Path
+        data_path = Path(__file__).parents[2] / "data" / "Dataset_Master_ERA5_Ready_LSTM.csv"
+        df_master = pd.read_csv(data_path)
+        # Filter by kabupaten and month
+        df_filtered = df_master.copy()
+        if "Kabupaten" in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["Kabupaten"].str.lower() == params["kabupaten"].lower()]
+        if "month" in df_filtered.columns:
+            df_filtered = df_filtered[df_filtered["month"] == params["month"]]
+        # Ensure date column exists and sorted
+        if "date" in df_filtered.columns:
+            df_filtered["date"] = pd.to_datetime(df_filtered["date"])
+            df_filtered = df_filtered.sort_values("date")
+        # Take last 30 days (or all if less)
+        df_window = df_filtered.tail(30)[["ERA5_LST_Mean", "LST_Mean", "LST_Anomaly"]]
+        if df_window.empty:
+            st.error("⚠️ Tidak ada data historis yang cocok untuk lokasi & bulan ini.")
+            return None
+        # Pad if fewer than 30 rows
+        if len(df_window) < 30:
+            last_row = df_window.iloc[-1]
+            pad_rows = pd.DataFrame([last_row] * (30 - len(df_window)), columns=df_window.columns)
+            df_window = pd.concat([df_window, pad_rows], ignore_index=True)
+        # Data statik tetap dari input pengguna
+        df_static = pd.DataFrame({
+            "Elevation_m": [params["elevation"]],
+            "NDVI_8Day_Mean": [params["ndvi"]],
+            "SoilMoisture_Daily_Mean": [params["soil_moisture"]],
+        })
+
+        raw_result = service.predict(
+            df_window=df_window,
+            df_static=df_static
         )
-        return result
+
+        # Prediksi suhu = anomali + suhu terakhir pada window (atau nilai input jika window tidak ada)
+        last_lst = df_window["LST_Mean"].iloc[-1] if not df_window.empty else params["lst_mean"]
+        
+        # Cari rata-rata historis bulanan untuk ditambahkan ke anomali hasil prediksi
+        # Model dilatih untuk memprediksi ANOMALI yang ditambahkan ke SUHU HISTORIS BULANAN (LST_Historical_Mean), 
+        # bukan ke suhu instan hari terakhir.
+        # Mari ambil LST_Historical_Mean dari baris terakhir data master.
+        from backend.pipeline.feature_engineering import calculate_features
+        import json
+        
+        # Baca file baselines untuk mendapatkan historical mean
+        baselines_path = Path(__file__).parents[2] / "backend" / "config" / "baselines.json"
+        if baselines_path.exists():
+            with open(baselines_path, "r") as f:
+                baselines = json.load(f)
+                hist_means = baselines.get("historical_means", {})
+                kab_means = hist_means.get(params["kabupaten"].lower(), {})
+                hist_mean = kab_means.get(str(params["month"]), last_lst)
+        else:
+            hist_mean = last_lst
+
+        return {
+            "h1": raw_result["prediction"]["H1"]["anomaly_temp"] + hist_mean,
+            "h3": raw_result["prediction"]["H3"]["anomaly_temp"] + hist_mean,
+            "h7": raw_result["prediction"]["H7"]["anomaly_temp"] + hist_mean,
+        }
+
     except Exception as e:
         st.error(f"❌ Prediksi gagal: {e}")
         return None
 
 
 def render_result_cards(result: dict) -> None:
-    """Menampilkan kartu hasil prediksi H+1, H+3, H+7."""
+    """Menampilkan kartu hasil prediksi Hari Ini, H+2, H+6."""
     st.markdown("### 📊 Hasil Prediksi")
 
     horizons = [
-        ("H+1", result.get("h1", 0.0), "Prediksi 1 hari ke depan"),
-        ("H+3", result.get("h3", 0.0), "Prediksi 3 hari ke depan"),
-        ("H+7", result.get("h7", 0.0), "Prediksi 7 hari ke depan"),
+        ("Hari Ini", result.get("h1", 0.0), "Prediksi suhu untuk hari ini"),
+        ("H+2", result.get("h3", 0.0), "Prediksi suhu 2 hari ke depan"),
+        ("H+6", result.get("h7", 0.0), "Prediksi suhu 6 hari ke depan"),
     ]
 
     cols = st.columns(3)
@@ -209,7 +254,7 @@ def render_prediction_chart(result: dict) -> None:
     """Menampilkan grafik proyeksi prediksi dengan Plotly."""
     st.markdown("### 📈 Grafik Proyeksi Prediksi")
 
-    horizons = ["H+1", "H+3", "H+7"]
+    horizons = ["Hari Ini", "H+2", "H+6"]
     values = [result.get("h1", 0.0), result.get("h3", 0.0), result.get("h7", 0.0)]
 
     # Warna titik berdasarkan status
@@ -268,7 +313,7 @@ def render_input_summary(params: dict) -> None:
         rows = [
             ("Kabupaten / Kota", params["kabupaten"]),
             ("LST Mean", f"{params['lst_mean']:.1f} °C"),
-            ("Soil Moisture", f"{params['soil_moisture']:.2f} m³/m³"),
+            ("Soil Moisture", f"{params['soil_moisture']:.1f} %"),
             ("NDVI", f"{params['ndvi']:.2f}"),
             ("Elevasi", f"{params['elevation']} mdpl"),
             ("Bulan Simulasi", nama_bulan),

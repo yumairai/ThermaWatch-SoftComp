@@ -13,12 +13,7 @@ from datetime import datetime, timedelta
 
 from services.sheets_service import get_daily_data, get_predictions
 
-# ─── Konfigurasi Halaman ──────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="ThermaWatch | Dashboard",
-    page_icon="🌋",
-    layout="wide",
-)
+
 
 # ─── CSS Kustom ───────────────────────────────────────────────────────────────
 st.markdown("""
@@ -173,13 +168,13 @@ def render_kpi(df: pd.DataFrame) -> None:
 
 
 def render_prediction_cards(pred_df: pd.DataFrame) -> None:
-    """Menampilkan kartu prediksi H+1, H+3, H+7."""
+    """Menampilkan kartu prediksi Hari Ini, H+2, H+6."""
     st.markdown("### 🤖 Prediksi Suhu (Dual-Branch ANFIS-LSTM)")
 
     horizons = {
-        "H+1": "pred_h1",
-        "H+3": "pred_h3",
-        "H+7": "pred_h7",
+        "Hari Ini": "pred_h1",
+        "H+2": "pred_h3",
+        "H+6": "pred_h7",
     }
 
     cols = st.columns(3)

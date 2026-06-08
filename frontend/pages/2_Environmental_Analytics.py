@@ -12,12 +12,6 @@ from plotly.subplots import make_subplots
 
 from services.sheets_service import get_daily_data
 
-# ─── Konfigurasi Halaman ──────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="ThermaWatch | Environmental Analytics",
-    page_icon="🌿",
-    layout="wide",
-)
 
 # ─── CSS Kustom ───────────────────────────────────────────────────────────────
 st.markdown("""
@@ -60,6 +54,13 @@ WARNA_VARIABEL = {
     "Elevation": "#a78bfa",
     "Anomaly": "#f43f5e",
 }
+
+def hex_to_rgba(hex_color, alpha=0.08):
+    hex_color = hex_color.lstrip("#")
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -203,7 +204,7 @@ def render_time_series_charts(df: pd.DataFrame, kolom: list[str]) -> None:
                 name=var.replace("_", " "),
                 line=dict(color=warna, width=1.8),
                 fill="tozeroy",
-                fillcolor=warna.replace(")", ", 0.08)").replace("rgb", "rgba") if "rgb" in warna else f"{warna}15",
+                fillcolor=hex_to_rgba(warna, 0.08),
             ),
             row=i,
             col=1,

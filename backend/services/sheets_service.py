@@ -71,3 +71,53 @@ class SheetsService:
         """Menambahkan banyak baris sekaligus."""
         sheet = self.get_worksheet(spreadsheet_name, sheet_name)
         sheet.append_rows(rows_data)
+
+
+# Fungsi Helper untuk Frontend Streamlit
+import streamlit as st
+
+@st.cache_data(ttl=3600)
+def get_daily_data(spreadsheet_name="thermawatch-data"):
+    """Mengambil data harian untuk dashboard frontend dengan caching."""
+    service = SheetsService()
+    df = service.read_data(spreadsheet_name=spreadsheet_name, sheet_name="daily_data")
+    
+    # Mapping kolom jika perlu, atau mengembalikan langsung
+    # Dashboard mencari "Suhu_Celcius", "Tanggal", dsb, mari buat mapping sederhana 
+    # berdasarkan header yang sebenarnya
+    if not df.empty:
+        if 'date' in df.columns and 'Tanggal' not in df.columns:
+            df['Tanggal'] = pd.to_datetime(df['date'])
+        if 'lst_mean' in df.columns and 'Suhu_Celcius' not in df.columns:
+            # Gunakan kolom prediksi_suhu_h1 atau lst_mean sebagai "Suhu_Celcius" di UI
+            df['Suhu_Celcius'] = pd.to_numeric(df['lst_mean'], errors='coerce')
+        if 'soil_moisture' in df.columns and 'Soil_Moisture' not in df.columns:
+            df['Soil_Moisture'] = pd.to_numeric(df['soil_moisture'], errors='coerce')
+        if 'ndvi' in df.columns and 'NDVI' not in df.columns:
+            df['NDVI'] = pd.to_numeric(df['ndvi'], errors='coerce')
+        if 'lst_anomaly' in df.columns and 'Anomaly' not in df.columns:
+            df['Anomaly'] = pd.to_numeric(df['lst_anomaly'], errors='coerce')
+        if 'kabupaten' in df.columns and 'Kabupaten' not in df.columns:
+            df['Kabupaten'] = df['kabupaten']
+        if 'lat' in df.columns and 'Latitude' not in df.columns:
+            df['Latitude'] = pd.to_numeric(df['lat'], errors='coerce')
+        if 'lon' in df.columns and 'Longitude' not in df.columns:
+            df['Longitude'] = pd.to_numeric(df['lon'], errors='coerce')
+            
+    return df
+
+@st.cache_data(ttl=3600)
+def get_predictions(spreadsheet_name="thermawatch-data"):
+    """Mengambil data prediksi untuk dashboard frontend."""
+    # Data prediksi sudah tergabung di sheet daily_data, 
+    # jadi bisa kita ambil dari sana, atau return df utuhnya saja
+    service = SheetsService()
+    df = service.read_data(spreadsheet_name=spreadsheet_name, sheet_name="daily_data")
+    if not df.empty:
+        if 'prediksi_suhu_h1' in df.columns:
+            df['pred_h1'] = pd.to_numeric(df['prediksi_suhu_h1'], errors='coerce')
+        if 'prediksi_suhu_h3' in df.columns:
+            df['pred_h3'] = pd.to_numeric(df['prediksi_suhu_h3'], errors='coerce')
+        if 'prediksi_suhu_h7' in df.columns:
+            df['pred_h7'] = pd.to_numeric(df['prediksi_suhu_h7'], errors='coerce')
+    return df
