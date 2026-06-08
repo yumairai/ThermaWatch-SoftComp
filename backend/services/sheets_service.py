@@ -15,14 +15,18 @@ class SheetsService:
 
     def authenticate(self):
         """Autentikasi ke Google Sheets menggunakan file service account credentials."""
-        if not os.path.exists(self.credentials_path):
+        resolved_path = self.credentials_path
+        if not os.path.exists(resolved_path) and os.path.exists(os.path.join("backend", resolved_path)):
+            resolved_path = os.path.join("backend", resolved_path)
+
+        if not os.path.exists(resolved_path):
             raise FileNotFoundError(
-                f"File credentials tidak ditemukan di {self.credentials_path}. "
+                f"File credentials tidak ditemukan di {self.credentials_path} atau {resolved_path}. "
                 f"Pastikan Anda telah meletakkan file credentials.json di folder config."
             )
-        
+
         creds = Credentials.from_service_account_file(
-            self.credentials_path, 
+            resolved_path, 
             scopes=self.scopes
         )
         self.client = gspread.authorize(creds)

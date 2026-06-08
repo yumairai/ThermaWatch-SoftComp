@@ -39,13 +39,13 @@ jobs:
     # 5. Rekonstruksi file credentials.json secara temporer dari GitHub Secrets
     - name: Setup Credentials File
       run: |
-        mkdir -p config
-        echo '${{ secrets.GCP_SERVICE_ACCOUNT }}' > config/credentials.json
+        mkdir -p backend/config
+        echo '${{ secrets.GCP_SERVICE_ACCOUNT }}' > backend/config/credentials.json
 
     # 6. Jalankan Script Pipeline Utama
     - name: Run Pipeline Script
       run: |
-        python -m pipeline.run_daily_pipeline
+        PYTHONPATH=backend python -m pipeline.run_daily_pipeline
 
     # 7. Commit & Push perubahan database lokal (CSV) kembali ke repository GitHub Anda
     - name: Commit and Push Updated Local CSV Database
@@ -54,6 +54,6 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add Dataset_Master_ERA5_Ready_LSTM.csv
+        git add data/Dataset_Master_ERA5_Ready_LSTM.csv
         git commit -m "chore: auto-update local database for $(date +'%Y-%m-%d')" || exit 0
         git push

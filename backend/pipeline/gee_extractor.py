@@ -289,3 +289,55 @@ class GEEExtractor:
             })
             
         return pd.DataFrame(data_list)
+
+    def extract_gfs(self, target_date_str):
+        """Mengekstrak GFS 2m Temperature harian untuk target date."""
+        print(f"[GEE] Mengekstrak GFS Temperature untuk tanggal: {target_date_str}")
+        start_date = ee.Date(target_date_str)
+        end_date = start_date.advance(1, 'day')
+        
+        gfs_coll = ee.ImageCollection('NOAA/GFS0P25') \
+                     .filterBounds(self.jabar_regions) \
+                     .filterDate(start_date, end_date) \
+                     .select('temperature_2m_above_ground')
+                     
+        if gfs_coll.size().getInfo() == 0:
+            print(f"[GEE] [WARN] Tidak ada GFS data untuk tanggal {target_date_str}")
+            return pd.DataFrame()
+            
+        mean_img = gfs_coll.mean().rename('GFS_Temp')
+        
+        stats = mean_img.reduceRegions(
+            collection=self.jabar_regions,
+            reducer=ee.Reducer.mean(),
+            scale=27830
+        )
+        
+        features = stats.getInfo().get('features', [])
+        data_list = []
+        for feat in features:
+            props = feat['properties']
+            val = props.get('mean', None)
+            if val is not None:
+                val = val - 273.15  # Convert Kelvin to Celsius
+            data_list.append({
+                'date': target_date_str,
+                'Kabupaten': self.clean_kabupaten_name(props.get('ADM2_NAME')),
+                'GFS_Temp': val
+            })
+            
+        return pd.DataFrame(data_list)
+
+    def extract_gfs_range(self, start_date_str, end_date_str):
+        """Mengekstrak GFS harian untuk rentang tanggal tertentu."""
+        print(f"[GEE] Mengekstrak GFS range: {start_date_str} s/d {end_date_str}")
+        date_list = pd.date_range(start=start_date_str, end=end_date_str).strftime('%Y-%m-%d').tolist()
+        gfs_dfs = []
+        for d_str in date_list:
+            df_d = self.extract_gfs(d_str)
+            if not df_d.empty:
+                gfs_dfs.append(df_d)
+        if gfs_dfs:
+            return pd.concat(gfs_dfs, ignore_index=True)
+        return pd.DataFrame()
+

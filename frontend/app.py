@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'backend')))
+
 import streamlit as st
 
 # Konfigurasi Utama Halaman (Harus dipanggil paling pertama)

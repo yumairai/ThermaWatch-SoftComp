@@ -1,5 +1,6 @@
 # Google Credentials (Sangat Rahasia)
-config/credentials.json
+**/credentials.json
+backend/config/credentials.json
 
 # Python Cache
 __pycache__/

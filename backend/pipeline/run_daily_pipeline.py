@@ -15,8 +15,12 @@ def run_daily_pipeline(target_date_str=None):
     print("==============================================================")
 
     # 1. Inisialisasi GEE Extractor terlebih dahulu untuk memeriksa tanggal satelit
+    credentials_path = "config/credentials.json"
+    if not os.path.exists(credentials_path) and os.path.exists("backend/config/credentials.json"):
+        credentials_path = "backend/config/credentials.json"
+
     try:
-        extractor = GEEExtractor("config/credentials.json")
+        extractor = GEEExtractor(credentials_path)
     except Exception as e:
         print(f"[ERROR] Gagal inisialisasi GEE Extractor: {e}")
         return
@@ -88,7 +92,22 @@ def run_daily_pipeline(target_date_str=None):
     df_today_coords = df_today.groupby(['date', 'Kabupaten'])[coord_cols].first().reset_index()
     df_today = pd.merge(df_today_unique, df_today_coords, on=['date', 'Kabupaten'], how='left')
 
-    # 4. Inisialisasi Model Predictor
+    # 4. Extract NOAA GFS daily temperature for delta-scaling (Range: target_date - 6 days to target_date)
+    gfs_start = (target_date - timedelta(days=6)).strftime('%Y-%m-%d')
+    gfs_end = target_date_str
+    print(f"\n[Pipeline] Mengekstrak data GFS untuk delta-scaling dari {gfs_start} s/d {gfs_end}...")
+    try:
+        df_gfs_all = extractor.extract_gfs_range(gfs_start, gfs_end)
+        if not df_gfs_all.empty:
+            df_gfs_all['date'] = pd.to_datetime(df_gfs_all['date'])
+            df_gfs_all['Kabupaten'] = df_gfs_all['Kabupaten'].str.lower().str.strip()
+            # Deduplicate GFS data by averaging over the same date and kabupaten (e.g. Kabupaten/Kota Bandung)
+            df_gfs_all = df_gfs_all.groupby(['date', 'Kabupaten'])['GFS_Temp'].mean().reset_index()
+    except Exception as e:
+        print(f"[Pipeline] [WARN] Gagal mengekstrak GFS: {e}. Delta-scaling dilewati.")
+        df_gfs_all = pd.DataFrame()
+
+    # 5. Inisialisasi Model Predictor
     predictor = PredictorPipeline(
         model_path="model/best_model.pt",
         scaler_path="model/scalers.pkl",
@@ -108,8 +127,8 @@ def run_daily_pipeline(target_date_str=None):
         if row_today.empty:
             continue
             
-        # Ambil histori 29 hari ke belakang dari database lokal untuk kabupaten ini
-        df_hist = df_db[df_db['Kabupaten'] == kab].sort_values(by='date').tail(29)
+        # Ambil histori 29 hari ke belakang (hanya tanggal sebelum target_date)
+        df_hist = df_db[(df_db['Kabupaten'] == kab) & (df_db['date'] < target_date)].sort_values(by='date').tail(29)
         
         if len(df_hist) < 29:
             print(f"[WARN] Histori kabupaten '{kab}' kurang dari 29 hari. Menggunakan data yang ada.")
@@ -126,6 +145,12 @@ def run_daily_pipeline(target_date_str=None):
 
         # Jalankan kalkulasi fitur dan prediksi model ANFIS-LSTM
         try:
+            # Gabungkan data GFS ke df_30_days untuk delta-scaling
+            if not df_gfs_all.empty:
+                if 'GFS_Temp' in df_30_days.columns:
+                    df_30_days = df_30_days.drop(columns=['GFS_Temp'])
+                df_30_days = pd.merge(df_30_days, df_gfs_all, on=['date', 'Kabupaten'], how='left')
+                
             # Lakukan feature engineering terlebih dahulu untuk mendapatkan data ter-interpolasi & LST_Anomaly
             df_processed = calculate_features(df_30_days, predictor.elevasi_dict, predictor.historical_means)
             
@@ -140,7 +165,8 @@ def run_daily_pipeline(target_date_str=None):
             )
             
             # Cari fallback koordinat jika hari ini NaN (ambil dari data historis terakhir yang valid)
-            latest_row = df_processed.iloc[-1]
+            target_row_mask = df_processed['date'] == target_date
+            latest_row = df_processed[target_row_mask].iloc[0] if target_row_mask.any() else df_processed.iloc[-1]
             lat_val = latest_row['ERA5_Max_Lat']
             lon_val = latest_row['ERA5_Max_Lon']
             
@@ -158,11 +184,17 @@ def run_daily_pipeline(target_date_str=None):
                 "date": target_date_str,
                 "Kabupaten": kab,
                 "LST_Mean": latest_row['LST_Mean'],
+                "LST_Max": latest_row.get('LST_Max', None),
+                "LST_Percentile95": latest_row.get('LST_Percentile95', None),
+                "Cloud_Cover_Percentage": latest_row.get('Cloud_Cover_Percentage', None),
                 "ERA5_LST_Mean": latest_row['ERA5_LST_Mean'],
+                "ERA5_LST_Max": latest_row.get('ERA5_LST_Max', None),
+                "ERA5_LST_Percentile95": latest_row.get('ERA5_LST_Percentile95', None),
                 "SoilMoisture_Daily_Mean": latest_row['SoilMoisture_Daily_Mean'],
-                "NDVI_8Day_Mean": latest_row['NDVI_8Day_Mean'],
                 "Elevation_m": latest_row['Elevation_m'],
+                "NDVI_8Day_Mean": latest_row['NDVI_8Day_Mean'],
                 "month": int(latest_row['month']),
+                "LST_Historical_Mean": latest_row.get('LST_Historical_Mean', None),
                 "LST_Anomaly": latest_row['LST_Anomaly'],
                 "prediction": prediction_res["prediction"],
                 "ERA5_Max_Lat": float(lat_val),
@@ -178,7 +210,7 @@ def run_daily_pipeline(target_date_str=None):
 
     # 6. Tulis ke Google Sheets
     try:
-        writer = SpreadsheetWriter(spreadsheet_name="thermawatch-data", credentials_path="config/credentials.json")
+        writer = SpreadsheetWriter(spreadsheet_name="thermawatch-data", credentials_path=credentials_path)
         writer.write_predictions(final_pipeline_outputs, sheet_name="daily_data")
     except Exception as e:
         print(f"[ERROR] Gagal menulis ke Google Sheets: {e}")
@@ -198,13 +230,20 @@ def run_daily_pipeline(target_date_str=None):
             "date": item["date"],
             "Kabupaten": item["Kabupaten"],
             "LST_Mean": item["LST_Mean"],
+            "LST_Max": item.get("LST_Max", None),
+            "LST_Percentile95": item.get("LST_Percentile95", None),
+            "Cloud_Cover_Percentage": item.get("Cloud_Cover_Percentage", None),
             "ERA5_LST_Mean": item["ERA5_LST_Mean"],
+            "ERA5_LST_Max": item.get("ERA5_LST_Max", None),
+            "ERA5_LST_Percentile95": item.get("ERA5_LST_Percentile95", None),
+            "ERA5_Cloud_Cover_Percentage": item.get("ERA5_Cloud_Cover_Percentage", 0),
             "SoilMoisture_Daily_Mean": item["SoilMoisture_Daily_Mean"],
             "NDVI_8Day_Mean": item["NDVI_8Day_Mean"],
             "Elevation_m": item["Elevation_m"],
             "month": item["month"],
+            "LST_Historical_Mean": item.get("LST_Historical_Mean", None),
             "LST_Anomaly": item["LST_Anomaly"],
-            "Target_Anomali_H1": h1, # Simpan prediksi H1 sebagai target sementara
+            "Target_Anomali_H1": h1,
             "Target_Anomali_H3": h3,
             "Target_Anomali_H7": h7,
             "ERA5_Max_Lat": item["ERA5_Max_Lat"],
@@ -231,4 +270,31 @@ if __name__ == '__main__':
     parser.add_argument('--date', type=str, help='Target date (YYYY-MM-DD), default is yesterday.')
     args = parser.parse_args()
     
-    run_daily_pipeline(args.date)
+    if args.date:
+        run_daily_pipeline(args.date)
+    else:
+        # Menjalankan sliding window healing untuk 15 hari terakhir (H-15 s/d H-1) secara berurutan
+        print("\n==============================================================")
+        print("    MEMULAI SLIDING WINDOW HEALING & PREDIKSI (H-15 s/d H-1)    ")
+        print("==============================================================")
+        
+        today = datetime.now()
+        dates_to_run = []
+        for i in range(15, 0, -1):
+            d_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
+            dates_to_run.append(d_str)
+            
+        print(f"[Scheduler] Rentang tanggal yang akan diproses: {dates_to_run}")
+        
+        for d_str in dates_to_run:
+            print(f"\n[Scheduler] >>> MEMULAI PROSES TANGGAL: {d_str} <<<")
+            try:
+                run_daily_pipeline(d_str)
+            except Exception as e:
+                print(f"[Scheduler] [ERROR] Gagal memproses tanggal {d_str}: {e}")
+        
+        print("\n==============================================================")
+        print("         SELURUH SLIDING WINDOW RUN SELESAI DENGAN SUKSES       ")
+        print("==============================================================")
+
+
