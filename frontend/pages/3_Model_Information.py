@@ -8,12 +8,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# ─── Konfigurasi Halaman ──────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="ThermaWatch | Model Information",
-    page_icon="🤖",
-    layout="wide",
-)
 
 # ─── CSS Kustom ───────────────────────────────────────────────────────────────
 st.markdown("""
@@ -292,9 +286,12 @@ def render_architecture_diagram() -> None:
 
     for x0, y0, x1, y1 in connections:
         fig.add_annotation(
-            x=x1, y=y1, ax=x0, ay=y0,
-            xref="paper", yref="paper",
-            axref="paper", ayref="paper",
+            x=x1, y=y1,
+            ax=x0, ay=y0,
+            xref="x",
+            yref="y",
+            axref="x",
+            ayref="y",
             showarrow=True,
             arrowhead=2,
             arrowsize=1.2,

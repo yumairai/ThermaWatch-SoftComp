@@ -12,8 +12,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def main():
-    # Menampilkan Logo atau Banner (Opsional, gunakan emoji atau gambar)
+def render_home():
+    # Menampilkan Logo atau Banner
     st.markdown("<h1 style='text-align: center; color: #f97316;'>🌍 ThermaWatch - SoftComp</h1>", unsafe_allow_html=True)
     st.markdown("<h4 style='text-align: center; color: #94a3b8;'>Sistem Pemantauan Suhu & Kualitas Lingkungan Berbasis Geospasial</h4>", unsafe_allow_html=True)
     
@@ -29,10 +29,10 @@ def main():
         #### 🧭 Navigasi Menu
         Silakan gunakan menu di *sidebar* sebelah kiri untuk mengakses berbagai fitur:
         
-        - **📊 1. Dashboard**: Pantau kondisi suhu aktual, persebaran spasial pada peta, dan tren historis.
-        - **🍃 2. Environmental Analytics**: Analisis mendalam mengenai metrik lingkungan lainnya seperti *Soil Moisture* dan indeks vegetasi (NDVI).
-        - **🤖 3. Model Information**: Pelajari arsitektur prediksi *Machine Learning* (ANFIS-LSTM) yang digunakan oleh sistem ini.
-        - **🔬 4. Simulation**: Lakukan simulasi kondisi suhu berdasarkan input parameter lingkungan buatan.
+        - **📊 Dashboard**: Pantau kondisi suhu aktual, persebaran spasial pada peta, dan tren historis.
+        - **🍃 Environmental Analytics**: Analisis mendalam mengenai metrik lingkungan lainnya seperti *Soil Moisture* dan indeks vegetasi (NDVI).
+        - **🤖 Model Information**: Pelajari arsitektur prediksi *Machine Learning* (ANFIS-LSTM) yang digunakan oleh sistem ini.
+        - **🔬 Simulation**: Lakukan simulasi kondisi suhu berdasarkan input parameter lingkungan buatan.
         """)
 
     with col2:
@@ -43,13 +43,24 @@ def main():
         - **Model**: Dual-Branch ANFIS-LSTM
         - **Status**: 🟢 Aktif & Berjalan
         """)
-        
-        # Tambahkan ilustrasi sederhana atau gambar jika ada di folder assets/
-        # st.image("assets/logo.png", use_column_width=True)
 
     st.divider()
     st.markdown("<p style='text-align: center; font-size: 0.8rem; color: gray;'>© 2026 ThermaWatch Project | Soft Computing</p>", unsafe_allow_html=True)
 
+# Membuat dictionary navigasi menggunakan st.Page
+pages = {
+    "Beranda": [
+        st.Page(render_home, title="Home", icon="🏠", default=True),
+    ],
+    "Menu Utama": [
+        st.Page("frontend/pages/1_Dashboard.py", title="Dashboard", icon="📊"),
+        st.Page("frontend/pages/2_Environmental_Analytics.py", title="Environmental Analytics", icon="🍃"),
+        st.Page("frontend/pages/3_Model_Information.py", title="Model Information", icon="🤖"),
+        st.Page("frontend/pages/4_Simulation.py", title="Simulation", icon="🔬"),
+    ]
+}
 
-if __name__ == "__main__":
-    main()
+# Terapkan navigasi multi-page native dari Streamlit (v1.36+)
+pg = st.navigation(pages)
+pg.run()
+
