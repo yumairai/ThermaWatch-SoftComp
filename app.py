@@ -14,8 +14,8 @@ st.set_page_config(
 
 def render_home():
     # Menampilkan Logo atau Banner
-    st.markdown("<h1 style='text-align: center; color: #f97316;'>🌍 ThermaWatch - SoftComp</h1>", unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align: center; color: #94a3b8;'>Sistem Pemantauan Suhu & Kualitas Lingkungan Berbasis Geospasial</h4>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #f97316;'>🌍 ThermaWatch</h1>", unsafe_allow_html=True)
+    st.markdown("<h4 style='text-align: center; color: #94a3b8;'>Sistem Monitoring Geothermal </h4>", unsafe_allow_html=True)
     
     st.divider()
 
