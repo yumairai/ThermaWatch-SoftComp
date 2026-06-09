@@ -9,3 +9,4 @@ python-dotenv
 streamlit-folium
 folium
 pydeck
+earthengine-api
