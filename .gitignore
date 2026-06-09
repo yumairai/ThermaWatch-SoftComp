@@ -1,6 +1,7 @@
 # Google Credentials (Sangat Rahasia)
 **/credentials.json
 backend/config/credentials.json
+.streamlit/secrets.toml
 
 # Python Cache
 __pycache__/
