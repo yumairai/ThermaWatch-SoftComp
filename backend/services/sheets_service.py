@@ -1,5 +1,6 @@
 import os
 import gspread
+import streamlit as st
 from google.oauth2.service_account import Credentials
 import pandas as pd
 
@@ -14,22 +15,36 @@ class SheetsService:
         self.authenticate()
 
     def authenticate(self):
-        """Autentikasi ke Google Sheets menggunakan file service account credentials."""
-        resolved_path = self.credentials_path
-        if not os.path.exists(resolved_path) and os.path.exists(os.path.join("backend", resolved_path)):
-            resolved_path = os.path.join("backend", resolved_path)
+            """Autentikasi menggunakan Streamlit Secrets jika di Cloud, atau file lokal jika di Local."""
+            # 1. Coba gunakan Streamlit Secrets terlebih dahulu (Sangat disarankan untuk Deployment)
+            if "gobjects" in st.secrets:
+                try:
+                    creds_dict = dict(st.secrets["gobjects"])
+                    creds = Credentials.from_service_account_info(
+                        creds_dict,
+                        scopes=self.scopes
+                    )
+                    self.client = gspread.authorize(creds)
+                    return  # Keluar jika otentikasi secrets berhasil
+                except Exception as e:
+                    print(f"[Sheets Service] Gagal otentikasi menggunakan st.secrets: {e}")
 
-        if not os.path.exists(resolved_path):
-            raise FileNotFoundError(
-                f"File credentials tidak ditemukan di {self.credentials_path} atau {resolved_path}. "
-                f"Pastikan Anda telah meletakkan file credentials.json di folder config."
+            # 2. Fallback ke file lokal jika secrets tidak tersedia atau gagal
+            resolved_path = self.credentials_path
+            if not os.path.exists(resolved_path) and os.path.exists(os.path.join("backend", resolved_path)):
+                resolved_path = os.path.join("backend", resolved_path)
+
+            if not os.path.exists(resolved_path):
+                raise FileNotFoundError(
+                    f"File credentials tidak ditemukan di {self.credentials_path} atau {resolved_path}. "
+                    f"Pastikan Anda telah memasukkan Secrets di Streamlit Cloud atau meletakkan credentials.json di lokal."
+                )
+
+            creds = Credentials.from_service_account_file(
+                resolved_path, 
+                scopes=self.scopes
             )
-
-        creds = Credentials.from_service_account_file(
-            resolved_path, 
-            scopes=self.scopes
-        )
-        self.client = gspread.authorize(creds)
+            self.client = gspread.authorize(creds)
 
     def get_worksheet(self, spreadsheet_name, sheet_name="daily_data"):
         """Membuka spreadsheet berdasarkan nama dan mengambil worksheet tertentu."""
@@ -210,4 +225,4 @@ def get_predictions(sheet_name="daily_data"):
         return df
     except Exception as e:
         print(f"[Sheets Helper] Gagal mengambil data prediksi: {e}")
-        return pd.DataFrame(columns=["Kabupaten", "pred_h1", "pred_h3", "pred_h7"])
+        return pd.DataFrame(columns=["Kabupaten", "pred_h1", "pred_h3", "pred_h7", "anom_h1", "anom_h3", "anom_h7"])
