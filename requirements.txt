@@ -10,3 +10,4 @@ streamlit-folium
 folium
 pydeck
 earthengine-api
+torch
