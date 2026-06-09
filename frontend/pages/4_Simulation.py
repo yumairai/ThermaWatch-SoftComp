@@ -53,14 +53,16 @@ KABUPATEN_LIST = [
 # FUNGSI HELPER
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _status_info(suhu: float) -> tuple[str, str, str]:
-    """Mengembalikan (emoji, label, css_color) berdasarkan nilai suhu."""
-    if suhu < 35:
-        return "🟢", "Aman", "#22c55e"
-    elif suhu < 40:
-        return "🟡", "Waspada", "#f59e0b"
+def _status_info(anomali: float) -> tuple[str, str, str]:
+    """Mengembalikan (emoji, label, css_color) berdasarkan nilai anomali."""
+    if anomali >= 2.5:
+        return "🔴", "BAHAYA (Potensi Manifestasi Aktif)", "#ef4444"
+    elif anomali >= 1.0:
+        return "🟡", "WASPADA (Pantau Berkala)", "#f59e0b"
+    elif anomali <= -2.0:
+        return "❄️", "ANOMALI DINGIN (Suhu Ekstrem)", "#3b82f6"
     else:
-        return "🔴", "Bahaya", "#ef4444"
+        return "🟢", "AMAN (Fluktuasi Normal)", "#22c55e"
 
 
 def render_header() -> None:
@@ -101,15 +103,28 @@ def render_input_form() -> dict:
         )
 
         st.markdown("#### 🌡️ Suhu & Kelembaban")
-        lst_mean = st.number_input(
-            "LST Mean (°C)",
+        lst_today = st.number_input(
+            "Suhu Hari Ini (T) °C",
             min_value=20.0,
             max_value=60.0,
             value=35.0,
             step=0.5,
             format="%.1f",
-            help="Rata-rata Land Surface Temperature hasil observasi.",
+            help="Suhu target / hari terakhir dalam window simulasi."
         )
+        lst_history_str = st.text_area(
+            "Suhu Historis (T-13 s/d T-1) °C",
+            value="35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0",
+            help="Masukkan tepat 13 nilai suhu dipisahkan dengan koma untuk historis sebelum hari ini."
+        )
+        try:
+            history_list = [float(x.strip()) for x in lst_history_str.split(",")]
+            lst_mean_list = history_list + [lst_today]
+            if len(lst_mean_list) != 14:
+                st.warning(f"Jumlah total LST (Historis + Hari Ini) tidak 14 (ditemukan {len(lst_mean_list)}). Prediksi mungkin gagal.")
+        except ValueError:
+            st.error("Input suhu historis tidak valid. Harap pastikan hanya berisi angka dan koma.")
+            lst_mean_list = [35.0] * 14
         soil_moisture = st.slider(
             "Soil Moisture (%)",
             min_value=0.0,
@@ -149,7 +164,7 @@ def render_input_form() -> dict:
 
     params = {
         "kabupaten": kabupaten,
-        "lst_mean": lst_mean,
+        "lst_mean_list": lst_mean_list,
         "soil_moisture": soil_moisture,
         "ndvi": ndvi,
         "elevation": elevation,
@@ -158,34 +173,63 @@ def render_input_form() -> dict:
     return params
 
 
-def run_prediction(params: dict) -> dict | None:
+def run_prediction(params: dict, is_modis: bool = False) -> dict | None:
     try:
-        service = ModelService()
+        if is_modis:
+            service = ModelService(model_path='model/best_model_modis.pt', scaler_path='model/scalers_modis.pkl')
+            data_filename = "Dataset_(Jan,2014-Mei,2026).csv"
+            main_lst_col = "MODIS_LST_Mean"
+        else:
+            service = ModelService()
+            data_filename = "Dataset_Master_ERA5_Ready_LSTM.csv"
+            main_lst_col = "ERA5_LST_Mean"
 
-        # Load data master ERA5 (cached per session)
+        # Load data master ERA5/MODIS
         from pathlib import Path
-        data_path = Path(__file__).parents[2] / "data" / "Dataset_Master_ERA5_Ready_LSTM.csv"
+        data_path = Path(__file__).parents[2] / "data" / data_filename
         df_master = pd.read_csv(data_path)
+        
         # Filter by kabupaten and month
         df_filtered = df_master.copy()
         if "Kabupaten" in df_filtered.columns:
             df_filtered = df_filtered[df_filtered["Kabupaten"].str.lower() == params["kabupaten"].lower()]
         if "month" in df_filtered.columns:
             df_filtered = df_filtered[df_filtered["month"] == params["month"]]
+        
         # Ensure date column exists and sorted
         if "date" in df_filtered.columns:
             df_filtered["date"] = pd.to_datetime(df_filtered["date"])
             df_filtered = df_filtered.sort_values("date")
-        # Take last 30 days (or all if less)
-        df_window = df_filtered.tail(30)[["ERA5_LST_Mean", "LST_Mean", "LST_Anomaly"]]
+            
+        # Take last 14 days
+        df_window = df_filtered.tail(14)[[main_lst_col, "LST_Mean", "LST_Anomaly"]]
         if df_window.empty:
             st.error("⚠️ Tidak ada data historis yang cocok untuk lokasi & bulan ini.")
             return None
-        # Pad if fewer than 30 rows
-        if len(df_window) < 30:
+        # Pad if fewer than 14 rows
+        if len(df_window) < 14:
             last_row = df_window.iloc[-1]
-            pad_rows = pd.DataFrame([last_row] * (30 - len(df_window)), columns=df_window.columns)
+            pad_rows = pd.DataFrame([last_row] * (14 - len(df_window)), columns=df_window.columns)
             df_window = pd.concat([df_window, pad_rows], ignore_index=True)
+
+        # Cari rata-rata historis bulanan
+        import json
+        baselines_path = Path(__file__).parents[2] / "backend" / "config" / "baselines.json"
+        hist_mean = 30.0  # Fallback default
+        if baselines_path.exists():
+            with open(baselines_path, "r") as f:
+                baselines = json.load(f)
+                hist_means = baselines.get("historical_means", {})
+                kab_means = hist_means.get(params["kabupaten"].lower(), {})
+                hist_mean = kab_means.get(str(params["month"]), 30.0)
+
+        # Modifikasi nilai LST di df_window menggunakan input manual user (lst_mean_list)
+        lst_mean_list = params.get("lst_mean_list", [])
+        if len(lst_mean_list) == 14:
+            df_window[main_lst_col] = lst_mean_list
+            df_window["LST_Mean"] = lst_mean_list
+            df_window["LST_Anomaly"] = np.array(lst_mean_list) - hist_mean
+
         # Data statik tetap dari input pengguna
         df_static = pd.DataFrame({
             "Elevation_m": [params["elevation"]],
@@ -198,31 +242,16 @@ def run_prediction(params: dict) -> dict | None:
             df_static=df_static
         )
 
-        # Prediksi suhu = anomali + suhu terakhir pada window (atau nilai input jika window tidak ada)
-        last_lst = df_window["LST_Mean"].iloc[-1] if not df_window.empty else params["lst_mean"]
-        
-        # Cari rata-rata historis bulanan untuk ditambahkan ke anomali hasil prediksi
-        # Model dilatih untuk memprediksi ANOMALI yang ditambahkan ke SUHU HISTORIS BULANAN (LST_Historical_Mean), 
-        # bukan ke suhu instan hari terakhir.
-        # Mari ambil LST_Historical_Mean dari baris terakhir data master.
-        from backend.pipeline.feature_engineering import calculate_features
-        import json
-        
-        # Baca file baselines untuk mendapatkan historical mean
-        baselines_path = Path(__file__).parents[2] / "backend" / "config" / "baselines.json"
-        if baselines_path.exists():
-            with open(baselines_path, "r") as f:
-                baselines = json.load(f)
-                hist_means = baselines.get("historical_means", {})
-                kab_means = hist_means.get(params["kabupaten"].lower(), {})
-                hist_mean = kab_means.get(str(params["month"]), last_lst)
-        else:
-            hist_mean = last_lst
+        # Prediksi suhu = anomali + suhu historis bulanan
+        last_lst = lst_mean_list[-1] if len(lst_mean_list) > 0 else 30.0
 
         return {
-            "h1": raw_result["prediction"]["H1"]["anomaly_temp"] + hist_mean,
-            "h3": raw_result["prediction"]["H3"]["anomaly_temp"] + hist_mean,
-            "h7": raw_result["prediction"]["H7"]["anomaly_temp"] + hist_mean,
+            "h1_temp": raw_result["prediction"]["H1"]["anomaly_temp"] + hist_mean,
+            "h3_temp": raw_result["prediction"]["H3"]["anomaly_temp"] + hist_mean,
+            "h7_temp": raw_result["prediction"]["H7"]["anomaly_temp"] + hist_mean,
+            "h1_anom": raw_result["prediction"]["H1"]["anomaly_temp"],
+            "h3_anom": raw_result["prediction"]["H3"]["anomaly_temp"],
+            "h7_anom": raw_result["prediction"]["H7"]["anomaly_temp"],
         }
 
     except Exception as e:
@@ -235,17 +264,17 @@ def render_result_cards(result: dict) -> None:
     st.markdown("### 📊 Hasil Prediksi")
 
     horizons = [
-        ("Hari Ini", result.get("h1", 0.0), "Prediksi suhu untuk hari ini"),
-        ("H+2", result.get("h3", 0.0), "Prediksi suhu 2 hari ke depan"),
-        ("H+6", result.get("h7", 0.0), "Prediksi suhu 6 hari ke depan"),
+        ("Hari Ini", result.get("h1_temp", 0.0), result.get("h1_anom", 0.0), "Prediksi suhu untuk hari ini"),
+        ("H+2", result.get("h3_temp", 0.0), result.get("h3_anom", 0.0), "Prediksi suhu 2 hari ke depan"),
+        ("H+6", result.get("h7_temp", 0.0), result.get("h7_anom", 0.0), "Prediksi suhu 6 hari ke depan"),
     ]
 
     cols = st.columns(3)
-    for col, (label, nilai, keterangan) in zip(cols, horizons):
-        emoji, status_txt, warna = _status_info(nilai)
+    for col, (label, nilai_temp, nilai_anom, keterangan) in zip(cols, horizons):
+        emoji, status_txt, warna = _status_info(nilai_anom)
         col.metric(
             label=f"{label} — {keterangan}",
-            value=f"{nilai:.2f} °C",
+            value=f"{nilai_temp:.2f} °C",
             delta=f"{emoji} {status_txt}",
         )
 
@@ -255,12 +284,13 @@ def render_prediction_chart(result: dict) -> None:
     st.markdown("### 📈 Grafik Proyeksi Prediksi")
 
     horizons = ["Hari Ini", "H+2", "H+6"]
-    values = [result.get("h1", 0.0), result.get("h3", 0.0), result.get("h7", 0.0)]
+    values = [result.get("h1_temp", 0.0), result.get("h3_temp", 0.0), result.get("h7_temp", 0.0)]
+    anomalies = [result.get("h1_anom", 0.0), result.get("h3_anom", 0.0), result.get("h7_anom", 0.0)]
 
-    # Warna titik berdasarkan status
+    # Warna titik berdasarkan status anomali
     colors = []
-    for v in values:
-        _, _, warna = _status_info(v)
+    for anom in anomalies:
+        _, _, warna = _status_info(anom)
         colors.append(warna)
 
     fig = go.Figure()
@@ -272,19 +302,13 @@ def render_prediction_chart(result: dict) -> None:
         mode="lines+markers+text",
         line=dict(color="#0ea5e9", width=3),
         marker=dict(size=14, color=colors, line=dict(width=2, color="#0f172a")),
-        text=[f"{v:.1f}°C" for v in values],
+        text=[f"{v:.1f}°C<br>({a:+.1f})" for v, a in zip(values, anomalies)],
         textposition="top center",
         textfont=dict(size=13, color="#f1f5f9"),
         fill="tozeroy",
         fillcolor="rgba(14,165,233,0.1)",
         name="Prediksi Suhu",
     ))
-
-    # Garis ambang batas
-    fig.add_hline(y=35, line_dash="dash", line_color="#f59e0b",
-                  annotation_text="🟡 Waspada (35°C)", annotation_position="right")
-    fig.add_hline(y=40, line_dash="dash", line_color="#ef4444",
-                  annotation_text="🔴 Bahaya (40°C)", annotation_position="right")
 
     fig.update_layout(
         template="plotly_dark",
@@ -312,7 +336,7 @@ def render_input_summary(params: dict) -> None:
 
         rows = [
             ("Kabupaten / Kota", params["kabupaten"]),
-            ("LST Mean", f"{params['lst_mean']:.1f} °C"),
+            ("LST Mean (14 Hari)", f"{params.get('lst_mean_list', [])}"),
             ("Soil Moisture", f"{params['soil_moisture']:.1f} %"),
             ("NDVI", f"{params['ndvi']:.2f}"),
             ("Elevasi", f"{params['elevation']} mdpl"),
@@ -336,7 +360,16 @@ def main() -> None:
     """Entry point halaman Simulasi."""
     render_header()
 
-    # ── Form Input ───────────────────────────────────────────────────────────
+    # 1. Tambahkan selektor model di sidebar
+    model_pilihan = st.sidebar.selectbox(
+        "🤖 Model AI Untuk Simulasi",
+        options=["ERA5 ANFIS-LSTM", "MODIS ANFIS-LSTM"],
+        index=0,
+        help="Pilih model dasar sensor yang ingin disimulasikan."
+    )
+    is_modis = model_pilihan == "MODIS ANFIS-LSTM"
+
+    # 2. Form Input
     params = render_input_form()
 
     st.markdown("")
@@ -350,10 +383,10 @@ def main() -> None:
 
     st.divider()
 
-    # ── Eksekusi Prediksi ────────────────────────────────────────────────────
+    # 3. Eksekusi Prediksi dengan mengirimkan parameter is_modis
     if run_btn:
         with st.spinner("🔄 Model sedang memproses prediksi..."):
-            result = run_prediction(params)
+            result = run_prediction(params, is_modis=is_modis)
 
         if result is not None:
             st.markdown("""

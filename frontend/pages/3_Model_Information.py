@@ -109,24 +109,43 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ─── Data Dummy Metrik Performa ───────────────────────────────────────────────
-PERFORMANCE_METRICS = {
-    "RMSE": {"nilai": "1.42", "satuan": "°C", "keterangan": "Root Mean Squared Error"},
-    "MAE": {"nilai": "1.08", "satuan": "°C", "keterangan": "Mean Absolute Error"},
-    "R²": {"nilai": "0.947", "satuan": "", "keterangan": "Coefficient of Determination"},
-    "MAPE": {"nilai": "3.21", "satuan": "%", "keterangan": "Mean Absolute Percentage Error"},
-}
+def get_performance_metrics(is_modis: bool = False) -> dict:
+    if is_modis:
+        return {
+            "RMSE": {"nilai": "1.50", "satuan": "°C", "keterangan": "Root Mean Squared Error"},
+            "MAE": {"nilai": "1.15", "satuan": "°C", "keterangan": "Mean Absolute Error"},
+            "R²": {"nilai": "0.925", "satuan": "", "keterangan": "Coefficient of Determination"},
+            "MAPE": {"nilai": "3.50", "satuan": "%", "keterangan": "Mean Absolute Percentage Error"},
+        }
+    return {
+        "RMSE": {"nilai": "1.42", "satuan": "°C", "keterangan": "Root Mean Squared Error"},
+        "MAE": {"nilai": "1.08", "satuan": "°C", "keterangan": "Mean Absolute Error"},
+        "R²": {"nilai": "0.947", "satuan": "", "keterangan": "Coefficient of Determination"},
+        "MAPE": {"nilai": "3.21", "satuan": "%", "keterangan": "Mean Absolute Percentage Error"},
+    }
 
-DATASET_INFO = {
-    "Jumlah Data": "12.480 baris",
-    "Jumlah Fitur": "18 fitur input",
-    "Rentang Waktu": "Januari 2021 – Desember 2023",
-    "Jumlah Lokasi": "24 kabupaten/kota",
-    "Resolusi Temporal": "Harian",
-    "Resolusi Spasial": "~1 km × 1 km",
-    "Sumber Data": "Google Earth Engine (MODIS, SMAP, NDVI)",
-    "Train / Val / Test": "70% / 15% / 15%",
-}
+def get_dataset_info(is_modis: bool = False) -> dict:
+    if is_modis:
+        return {
+            "Jumlah Data": "12.480 baris",
+            "Jumlah Fitur": "18 fitur input",
+            "Rentang Waktu": "Januari 2021 – Desember 2023",
+            "Jumlah Lokasi": "24 kabupaten/kota",
+            "Resolusi Temporal": "Harian",
+            "Resolusi Spasial": "~1 km × 1 km",
+            "Sumber Data": "Google Earth Engine (MODIS LST, SMAP, NDVI)",
+            "Train / Val / Test": "70% / 15% / 15%",
+        }
+    return {
+        "Jumlah Data": "12.480 baris",
+        "Jumlah Fitur": "18 fitur input",
+        "Rentang Waktu": "Januari 2021 – Desember 2023",
+        "Jumlah Lokasi": "24 kabupaten/kota",
+        "Resolusi Temporal": "Harian",
+        "Resolusi Spasial": "~1 km × 1 km",
+        "Sumber Data": "Google Earth Engine (ERA5 LST, SMAP, NDVI)",
+        "Train / Val / Test": "70% / 15% / 15%",
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -224,70 +243,152 @@ def render_model_overview() -> None:
             """, unsafe_allow_html=True)
 
 
-def render_architecture_diagram() -> None:
-    """Menampilkan diagram arsitektur model menggunakan Plotly."""
-    st.markdown("### 🗺️ Diagram Alur Arsitektur")
+def render_architecture_diagram():
+    st.markdown("### 🧠 ANFIS-LSTM Architecture")
 
     fig = go.Figure()
 
-    # Definisi node diagram
     nodes = [
-        # Branch A (kiri)
-        dict(x=0.15, y=0.85, label="Input LST\nHistoris", color="#1e3a5f", border="#38bdf8"),
-        dict(x=0.15, y=0.65, label="LSTM\nLayer 1", color="#1e40af", border="#60a5fa"),
-        dict(x=0.15, y=0.45, label="LSTM\nLayer 2-3", color="#1e40af", border="#60a5fa"),
+        # ===============================
+        # TEMPORAL BRANCH
+        # ===============================
+        {
+            "x": 0.25,
+            "y": 0.88,
+            "label": "Dynamic Features\n(LST Time Series)",
+            "color": "#1e40af",
+        },
+        {
+            "x": 0.25,
+            "y": 0.68,
+            "label": "Differentiable\nFuzzy Layer",
+            "color": "#2563eb",
+        },
+        {
+            "x": 0.25,
+            "y": 0.48,
+            "label": "LSTM Encoder",
+            "color": "#3b82f6",
+        },
 
-        # Branch B (kanan)
-        dict(x=0.85, y=0.85, label="Input Env\nFeatures", color="#1c3a2c", border="#4ade80"),
-        dict(x=0.85, y=0.65, label="Fuzzification\nLayer", color="#166534", border="#4ade80"),
-        dict(x=0.85, y=0.45, label="ANFIS\nFuzzy Rules", color="#166534", border="#4ade80"),
+        # ===============================
+        # ENVIRONMENTAL BRANCH
+        # ===============================
+        {
+            "x": 0.75,
+            "y": 0.88,
+            "label": "Static Features\n(NDVI, Elevation, Soil Moisture)",
+            "color": "#166534",
+        },
+        {
+            "x": 0.75,
+            "y": 0.58,
+            "label": "Environment\nBranch MLP",
+            "color": "#22c55e",
+        },
 
-        # Fusion
-        dict(x=0.50, y=0.25, label="Fusion Layer\n(Attention)", color="#3b0764", border="#a78bfa"),
+        # ===============================
+        # FUSION
+        # ===============================
+        {
+            "x": 0.50,
+            "y": 0.22,
+            "label": "Feature Fusion",
+            "color": "#7c3aed",
+        },
+        {
+            "x": 0.50,
+            "y": -0.04,
+            "label": "Shared MLP",
+            "color": "#9333ea",
+        },
 
-        # Output
-        dict(x=0.28, y=0.05, label="H+1\nPrediction", color="#7c2d12", border="#f97316"),
-        dict(x=0.50, y=0.05, label="H+3\nPrediction", color="#7c2d12", border="#f97316"),
-        dict(x=0.72, y=0.05, label="H+7\nPrediction", color="#7c2d12", border="#f97316"),
+        # ===============================
+        # OUTPUTS
+        # ===============================
+        {
+            "x": 0.25,
+            "y": -0.28,
+            "label": "H+1",
+            "color": "#ea580c",
+        },
+        {
+            "x": 0.50,
+            "y": -0.28,
+            "label": "H+3",
+            "color": "#ea580c",
+        },
+        {
+            "x": 0.75,
+            "y": -0.28,
+            "label": "H+7",
+            "color": "#ea580c",
+        },
     ]
 
-    # Gambar node sebagai scatter
+    # ===============================
+    # DRAW BOXES
+    # ===============================
     for node in nodes:
-        fig.add_trace(go.Scatter(
-            x=[node["x"]], y=[node["y"]],
-            mode="markers+text",
-            marker=dict(
-                size=55,
-                color=node["color"],
-                line=dict(color=node["border"], width=2),
-                symbol="square",
+
+        if "H+" in node["label"]:
+            width = 0.10
+            height = 0.055
+        else:
+            width = 0.16
+            height = 0.075
+
+        fig.add_shape(
+            type="rect",
+            x0=node["x"] - width,
+            x1=node["x"] + width,
+            y0=node["y"] - height,
+            y1=node["y"] + height,
+            fillcolor=node["color"],
+            line=dict(color="white", width=2),
+        )
+
+        fig.add_annotation(
+            x=node["x"],
+            y=node["y"],
+            text=node["label"].replace("\n", "<br>"),
+            showarrow=False,
+            font=dict(
+                color="white",
+                size=18,
             ),
-            text=node["label"],
-            textposition="middle center",
-            textfont=dict(size=9, color="#e2e8f0"),
-            showlegend=False,
-            hoverinfo="skip",
-        ))
+        )
 
-    # Panah koneksi Branch A
-    connections = [
-        (0.15, 0.85, 0.15, 0.65),  # Input → LSTM 1
-        (0.15, 0.65, 0.15, 0.45),  # LSTM 1 → LSTM 2-3
-        (0.15, 0.45, 0.50, 0.25),  # LSTM → Fusion
+    # ===============================
+    # ARROWS
+    # ===============================
+    arrows = [
 
-        (0.85, 0.85, 0.85, 0.65),  # Input → Fuzzification
-        (0.85, 0.65, 0.85, 0.45),  # Fuzzification → ANFIS
-        (0.85, 0.45, 0.50, 0.25),  # ANFIS → Fusion
+        # Dynamic Branch
+        (0.25, 0.82, 0.25, 0.75),
+        (0.25, 0.62, 0.25, 0.55),
+        (0.25, 0.40, 0.44, 0.31),
 
-        (0.50, 0.25, 0.28, 0.05),  # Fusion → H+1
-        (0.50, 0.25, 0.50, 0.05),  # Fusion → H+3
-        (0.50, 0.25, 0.72, 0.05),  # Fusion → H+7
+        # Static Branch
+        (0.75, 0.82, 0.75, 0.65),
+        (0.75, 0.50, 0.56, 0.31),
+
+        # Fusion → Shared
+        (0.50, 0.16, 0.50, 0.04),
+
+        # Shared → Outputs
+        (0.50, -0.12, 0.25, -0.21),
+        (0.50, -0.12, 0.50, -0.21),
+        (0.50, -0.12, 0.75, -0.21),
     ]
 
-    for x0, y0, x1, y1 in connections:
+    for x0, y0, x1, y1 in arrows:
+
         fig.add_annotation(
-            x=x1, y=y1,
-            ax=x0, ay=y0,
+            x=x1,
+            y=y1,
+            ax=x0,
+            ay=y0,
             xref="x",
             yref="y",
             axref="x",
@@ -295,37 +396,69 @@ def render_architecture_diagram() -> None:
             showarrow=True,
             arrowhead=2,
             arrowsize=1.2,
-            arrowwidth=1.5,
-            arrowcolor="#475569",
+            arrowwidth=2,
+            arrowcolor="#94a3b8",
         )
 
-    # Label branch
-    fig.add_annotation(x=0.15, y=0.97, text="<b>Branch A — LSTM</b>",
-                        showarrow=False, font=dict(size=11, color="#38bdf8"),
-                        xref="paper", yref="paper")
-    fig.add_annotation(x=0.85, y=0.97, text="<b>Branch B — ANFIS</b>",
-                        showarrow=False, font=dict(size=11, color="#4ade80"),
-                        xref="paper", yref="paper")
+    # ===============================
+    # BRANCH LABELS
+    # ===============================
+    fig.add_annotation(
+        x=0.25,
+        y=1.00,
+        text="<b>Temporal Branch</b>",
+        showarrow=False,
+        font=dict(
+            size=14,
+            color="#60a5fa"
+        )
+    )
 
+    fig.add_annotation(
+        x=0.75,
+        y=1.00,
+        text="<b>Environmental Branch</b>",
+        showarrow=False,
+        font=dict(
+            size=14,
+            color="#4ade80"
+        )
+    )
+
+    # ===============================
+    # LAYOUT
+    # ===============================
     fig.update_layout(
         template="plotly_dark",
+        height=800,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=420,
-        margin=dict(l=10, r=10, t=30, b=10),
-        xaxis=dict(visible=False, range=[-0.05, 1.05]),
-        yaxis=dict(visible=False, range=[-0.05, 1.05]),
+        margin=dict(
+            l=20,
+            r=20,
+            t=40,
+            b=20
+        ),
+        xaxis=dict(
+            visible=False,
+            range=[0, 1]
+        ),
+        yaxis=dict(
+            visible=False,
+            range=[-0.35, 1.05]
+        ),
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_performance_metrics() -> None:
+def render_performance_metrics(is_modis: bool = False) -> None:
     """Menampilkan badge metrik performa model."""
     st.markdown("### 📐 Metrik Performa Model")
 
+    metrics = get_performance_metrics(is_modis)
     cols = st.columns(4)
-    for col, (nama, info) in zip(cols, PERFORMANCE_METRICS.items()):
+    for col, (nama, info) in zip(cols, metrics.items()):
         with col:
             st.markdown(f"""
             <div class="metric-badge">
@@ -339,9 +472,14 @@ def render_performance_metrics() -> None:
 
     # Grafik perbandingan RMSE per horizon
     horizons = ["H+1", "H+3", "H+7"]
-    rmse_train = [0.98, 1.14, 1.42]
-    rmse_val = [1.05, 1.28, 1.57]
-    rmse_test = [1.08, 1.31, 1.62]
+    if is_modis:
+        rmse_train = [1.02, 1.25, 1.50]
+        rmse_val = [1.10, 1.35, 1.62]
+        rmse_test = [1.15, 1.40, 1.70]
+    else:
+        rmse_train = [0.98, 1.14, 1.42]
+        rmse_val = [1.05, 1.28, 1.57]
+        rmse_test = [1.08, 1.31, 1.62]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(name="Train", x=horizons, y=rmse_train, marker_color="#38bdf8"))
@@ -357,19 +495,20 @@ def render_performance_metrics() -> None:
         xaxis_title="Horizon",
         yaxis_title="RMSE (°C)",
         height=320,
-        margin=dict(l=10, r=10, t=40, b=10),
+        margin=dict(l=10, r=10, t=100, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_dataset_info() -> None:
+def render_dataset_info(is_modis: bool = False) -> None:
     """Menampilkan informasi dataset yang digunakan."""
     st.markdown("### 🗂️ Informasi Dataset")
 
     col1, col2 = st.columns(2, gap="large")
 
-    items = list(DATASET_INFO.items())
+    dataset_info = get_dataset_info(is_modis)
+    items = list(dataset_info.items())
     mid = len(items) // 2
 
     with col1:
@@ -445,6 +584,15 @@ def render_system_workflow() -> None:
 def main() -> None:
     """Entry point halaman Model Information."""
     render_header()
+    
+    # 1. Tambahkan selektor model di sidebar
+    model_pilihan = st.sidebar.selectbox(
+        "🤖 Model AI Utama",
+        options=["ERA5 ANFIS-LSTM", "MODIS ANFIS-LSTM"],
+        index=0,
+        help="Pilih model dasar yang ingin dilihat informasinya."
+    )
+    is_modis = model_pilihan == "MODIS ANFIS-LSTM"
 
     tab1, tab2, tab3, tab4 = st.tabs([
         "🧠 Arsitektur Model",
@@ -459,10 +607,10 @@ def main() -> None:
         render_architecture_diagram()
 
     with tab2:
-        render_performance_metrics()
+        render_performance_metrics(is_modis)
 
     with tab3:
-        render_dataset_info()
+        render_dataset_info(is_modis)
         st.markdown("")
         st.info(
             "💡 Data dikumpulkan menggunakan Google Earth Engine (GEE) "

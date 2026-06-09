@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "name": "Bandung" }, "geometry": { "type": "Polygon", "coordinates": [[[107.57,-6.95],[107.67,-6.95],[107.67,-7.05],[107.57,-7.05],[107.57,-6.95]]] } },
+    { "type": "Feature", "properties": { "name": "Banjar" }, "geometry": { "type": "Polygon", "coordinates": [[[108.54,-7.37],[108.64,-7.37],[108.64,-7.47],[108.54,-7.47],[108.54,-7.37]]] } },
+    { "type": "Feature", "properties": { "name": "Bekasi" }, "geometry": { "type": "Polygon", "coordinates": [[[106.95,-6.25],[107.05,-6.25],[107.05,-6.35],[106.95,-6.35],[106.95,-6.25]]] } },
+    { "type": "Feature", "properties": { "name": "Bogor" }, "geometry": { "type": "Polygon", "coordinates": [[[106.75,-6.55],[106.85,-6.55],[106.85,-6.65],[106.75,-6.65],[106.75,-6.55]]] } },
+    { "type": "Feature", "properties": { "name": "Ciamis" }, "geometry": { "type": "Polygon", "coordinates": [[[108.35,-7.33],[108.45,-7.33],[108.45,-7.43],[108.35,-7.43],[108.35,-7.33]]] } },
+    { "type": "Feature", "properties": { "name": "Cianjur" }, "geometry": { "type": "Polygon", "coordinates": [[[107.05,-6.85],[107.15,-6.85],[107.15,-6.95],[107.05,-6.95],[107.05,-6.85]]] } },
+    { "type": "Feature", "properties": { "name": "Cimahi" }, "geometry": { "type": "Polygon", "coordinates": [[[107.50,-6.87],[107.58,-6.87],[107.58,-6.95],[107.50,-6.95],[107.50,-6.87]]] } },
+    { "type": "Feature", "properties": { "name": "Cirebon" }, "geometry": { "type": "Polygon", "coordinates": [[[108.55,-6.70],[108.65,-6.70],[108.65,-6.80],[108.55,-6.80],[108.55,-6.70]]] } },
+    { "type": "Feature", "properties": { "name": "Depok" }, "geometry": { "type": "Polygon", "coordinates": [[[106.80,-6.37],[106.90,-6.37],[106.90,-6.47],[106.80,-6.47],[106.80,-6.37]]] } },
+    { "type": "Feature", "properties": { "name": "Garut" }, "geometry": { "type": "Polygon", "coordinates": [[[107.85,-7.15],[107.95,-7.15],[107.95,-7.25],[107.85,-7.25],[107.85,-7.15]]] } },
+    { "type": "Feature", "properties": { "name": "Indramayu" }, "geometry": { "type": "Polygon", "coordinates": [[[108.30,-6.32],[108.40,-6.32],[108.40,-6.42],[108.30,-6.42],[108.30,-6.32]]] } },
+    { "type": "Feature", "properties": { "name": "Karawang" }, "geometry": { "type": "Polygon", "coordinates": [[[107.25,-6.30],[107.35,-6.30],[107.35,-6.40],[107.25,-6.40],[107.25,-6.30]]] } },
+    { "type": "Feature", "properties": { "name": "Kuningan" }, "geometry": { "type": "Polygon", "coordinates": [[[108.45,-6.95],[108.55,-6.95],[108.55,-7.05],[108.45,-7.05],[108.45,-6.95]]] } },
+    { "type": "Feature", "properties": { "name": "Majalengka" }, "geometry": { "type": "Polygon", "coordinates": [[[108.20,-6.80],[108.30,-6.80],[108.30,-6.90],[108.20,-6.90],[108.20,-6.80]]] } },
+    { "type": "Feature", "properties": { "name": "Purwakarta" }, "geometry": { "type": "Polygon", "coordinates": [[[107.40,-6.55],[107.50,-6.55],[107.50,-6.65],[107.40,-6.65],[107.40,-6.55]]] } },
+    { "type": "Feature", "properties": { "name": "Subang" }, "geometry": { "type": "Polygon", "coordinates": [[[107.70,-6.45],[107.80,-6.45],[107.80,-6.55],[107.70,-6.55],[107.70,-6.45]]] } },
+    { "type": "Feature", "properties": { "name": "Sukabumi" }, "geometry": { "type": "Polygon", "coordinates": [[[106.90,-6.90],[107.00,-6.90],[107.00,-7.00],[106.90,-7.00],[106.90,-6.90]]] } },
+    { "type": "Feature", "properties": { "name": "Sumedang" }, "geometry": { "type": "Polygon", "coordinates": [[[107.90,-6.85],[108.00,-6.85],[108.00,-6.95],[107.90,-6.95],[107.90,-6.85]]] } },
+    { "type": "Feature", "properties": { "name": "Tasikmalaya" }, "geometry": { "type": "Polygon", "coordinates": [[[108.10,-7.30],[108.20,-7.30],[108.20,-7.40],[108.10,-7.40],[108.10,-7.30]]] } }
+  ]
+}

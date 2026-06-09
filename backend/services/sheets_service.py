@@ -135,12 +135,15 @@ def get_predictions(sheet_name="daily_data"):
             "prediksi_suhu_h1": "pred_h1",
             "prediksi_suhu_h3": "pred_h3",
             "prediksi_suhu_h7": "pred_h7",
+            "prediksi_anomali_h1": "anom_h1",
+            "prediksi_anomali_h3": "anom_h3",
+            "prediksi_anomali_h7": "anom_h7",
             "kabupaten": "Kabupaten"
         }
         df = df.rename(columns=rename_dict)
         
         # Konversi tipe data numerik
-        for col in ["pred_h1", "pred_h3", "pred_h7"]:
+        for col in ["pred_h1", "pred_h3", "pred_h7", "anom_h1", "anom_h3", "anom_h7"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
                 

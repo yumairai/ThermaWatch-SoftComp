@@ -343,10 +343,20 @@ def main() -> None:
     """Entry point halaman Environmental Analytics."""
     render_header()
 
-    # ── Ambil Data ──────────────────────────────────────────────────────────
-    with st.spinner("⏳ Memuat data lingkungan..."):
+    # 1. Tambahkan selektor model di sidebar
+    model_pilihan = st.sidebar.selectbox(
+        "🤖 Model AI Utama",
+        options=["ERA5 ANFIS-LSTM", "MODIS ANFIS-LSTM"],
+        index=0,
+        help="Pilih data sensor utama untuk dianalisis."
+    )
+    
+    sheet_name = "daily_data" if model_pilihan == "ERA5 ANFIS-LSTM" else "daily_data_modis"
+
+    # 2. Ambil data secara dinamis
+    with st.spinner(f"⏳ Memuat data {model_pilihan}..."):
         try:
-            df_raw = get_daily_data()
+            df_raw = get_daily_data(sheet_name=sheet_name)
         except Exception as e:
             st.error(f"❌ Gagal memuat data: {e}")
             st.stop()
