@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 
-from services.sheets_service import get_daily_data
+from backend.services.sheets_service import get_daily_data
 
 
 # ─── CSS Kustom ───────────────────────────────────────────────────────────────

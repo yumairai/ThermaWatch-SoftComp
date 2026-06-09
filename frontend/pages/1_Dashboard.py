@@ -13,7 +13,7 @@ import math
 import re
 from datetime import datetime, timedelta
 
-from services.sheets_service import get_daily_data, get_predictions
+from backend.services.sheets_service import get_daily_data, get_predictions
 
 
 

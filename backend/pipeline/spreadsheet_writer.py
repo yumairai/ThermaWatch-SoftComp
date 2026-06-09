@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from services.sheets_service import SheetsService
-from utils.status_classifier import classify_status
+from backend.services.sheets_service import SheetsService
+from backend.utils.status_classifier import classify_status
 
 class SpreadsheetWriter:
     def __init__(self, spreadsheet_name="thermawatch-data", credentials_path="config/credentials.json"):
