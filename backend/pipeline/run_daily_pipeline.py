@@ -407,7 +407,9 @@ if __name__ == '__main__':
         print("    MEMULAI SLIDING WINDOW HEALING & PREDIKSI (H-15 s/d H-1)    ")
         print("==============================================================")
         
-        today = datetime.now()
+        from datetime import timezone, timedelta
+        tz_jakarta = timezone(timedelta(hours=7))
+        today = datetime.now(tz_jakarta)
         dates_to_run = []
         for i in range(15, 0, -1):
             d_str = (today - timedelta(days=i)).strftime('%Y-%m-%d')
