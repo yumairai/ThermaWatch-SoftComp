@@ -16,9 +16,8 @@ class SheetsService:
 
     def authenticate(self):
             """Autentikasi menggunakan Streamlit Secrets jika di Cloud, atau file lokal jika di Local."""
-            # 1. Coba gunakan Streamlit Secrets terlebih dahulu (Sangat disarankan untuk Deployment)
-            if "gobjects" in st.secrets:
-                try:
+            try:
+                if "gobjects" in st.secrets:
                     creds_dict = dict(st.secrets["gobjects"])
                     creds = Credentials.from_service_account_info(
                         creds_dict,
@@ -26,8 +25,9 @@ class SheetsService:
                     )
                     self.client = gspread.authorize(creds)
                     return  # Keluar jika otentikasi secrets berhasil
-                except Exception as e:
-                    print(f"[Sheets Service] Gagal otentikasi menggunakan st.secrets: {e}")
+            except Exception as e:
+                # Abaikan error jika berjalan di luar konteks Streamlit (misal: GitHub Actions)
+                pass
 
             # 2. Fallback ke file lokal jika secrets tidak tersedia atau gagal
             resolved_path = self.credentials_path
