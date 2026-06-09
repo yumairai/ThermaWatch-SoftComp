@@ -360,12 +360,11 @@ def main() -> None:
     sheet_name = "daily_data" if model_pilihan == "ERA5 ANFIS-LSTM" else "daily_data_modis"
 
     # 2. Ambil data secara dinamis
-    with st.spinner(f"⏳ Memuat data {model_pilihan}..."):
-        try:
-            df_raw = get_daily_data(sheet_name=sheet_name)
-        except Exception as e:
-            st.error(f"❌ Gagal memuat data: {e}")
-            st.stop()
+    try:
+        df_raw = get_daily_data(sheet_name=sheet_name)
+    except Exception as e:
+        st.error(f"❌ Gagal memuat data: {e}")
+        st.stop()
 
     # ── Filter dari Sidebar ──────────────────────────────────────────────────
     df, kolom_dipilih = render_sidebar_filter(df_raw)

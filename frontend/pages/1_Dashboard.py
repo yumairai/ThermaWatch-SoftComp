@@ -275,6 +275,57 @@ import json
 with open("data/geojson/jawa_barat_kabupaten_detailed.json", "r", encoding="utf-8") as f:
     SAMPLE_GEOJSON = json.load(f)
 
+KAB_GEOMETRIES = {}
+KAB_CENTROIDS = {}
+
+for feat in SAMPLE_GEOJSON["features"]:
+    name = feat["properties"].get("name", "").strip().title()
+    geom = feat["geometry"]
+    KAB_GEOMETRIES[name] = geom
+    
+    # Extract coordinates to compute centroid
+    flat_coords = []
+    def extract_coords(c):
+        if isinstance(c[0], list):
+            for sub in c:
+                extract_coords(sub)
+        else:
+            flat_coords.append(c)
+    extract_coords(geom["coordinates"])
+    
+    if flat_coords:
+        lons = [c[0] for c in flat_coords]
+        lats = [c[1] for c in flat_coords]
+        KAB_CENTROIDS[name] = (sum(lats) / len(lats), sum(lons) / len(lons))
+
+
+def is_point_in_polygon(x: float, y: float, poly: list) -> bool:
+    n = len(poly)
+    inside = False
+    p1x, p1y = poly[0]
+    for i in range(n + 1):
+        p2x, p2y = poly[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+
+def is_inside_kabupaten(lat: float, lon: float, geom: dict) -> bool:
+    t = geom["type"]
+    if t == "Polygon":
+        return is_point_in_polygon(lon, lat, geom["coordinates"][0])
+    elif t == "MultiPolygon":
+        for poly in geom["coordinates"]:
+            if is_point_in_polygon(lon, lat, poly[0]):
+                return True
+    return False
+
 
 def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabupaten: str = "Semua Lokasi") -> None:
     """GIS Map: prediksi jadi utama + heatmap data aktual + tooltip sinkron kabupaten."""
@@ -282,89 +333,35 @@ def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabup
 
     st.markdown("### 🗺️ GIS Map")
 
-    KAB_CENTROIDS = {
-        "Bandung": (-6.898, 107.639),
-        "Bandung Barat": (-6.898, 107.425),
-        "Banjar": (-7.380, 108.553),
-        "Bekasi": (-6.306, 106.959),
-        "Bogor": (-6.586, 106.782),
-        "Ciamis": (-7.291, 108.425),
-        "Cianjur": (-7.023, 107.159),
-        "Cimahi": (-6.891, 107.545),
-        "Cirebon": (-6.740, 108.553),
-        "Depok": (-6.394, 106.828),
-        "Garut": (-7.266, 107.842),
-        "Indramayu": (-6.482, 108.126),
-        "Karawang": (-6.281, 107.406),
-        "Kuningan": (-6.979, 108.582),
-        "Majalengka": (-6.751, 108.195),
-        "Pangandaran": (-7.656, 108.517),
-        "Purwakarta": (-6.601, 107.379),
-        "Subang": (-6.449, 107.687),
-        "Sukabumi": (-6.935, 106.928),
-        "Sumedang": (-6.838, 107.991),
-        "Tasikmalaya": (-7.359, 108.229)
-    }
-
     # =========================
     # 1. CLEAN DATA
     # =========================
     df_map = df.copy()
+
     df_map["Kabupaten"] = df_map["Kabupaten"].astype(str).str.strip().str.title()
-    
-    KAB_GEOMETRIES = {feat['properties']['name']: feat['geometry'] for feat in geojson['features']}
+    df_map["Latitude"] = pd.to_numeric(df_map["Latitude"], errors="coerce")
+    df_map["Longitude"] = pd.to_numeric(df_map["Longitude"], errors="coerce")
 
-    def is_point_in_polygon(x, y, poly):
-        n = len(poly)
-        inside = False
-        p1x, p1y = poly[0]
-        for i in range(n + 1):
-            p2x, p2y = poly[i % n]
-            if y > min(p1y, p2y):
-                if y <= max(p1y, p2y):
-                    if x <= max(p1x, p2x):
-                        if p1y != p2y:
-                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                        if p1x == p2x or x <= xinters:
-                            inside = not inside
-            p1x, p1y = p2x, p2y
-        return inside
-
-    def is_inside_kabupaten(lat, lon, geom):
-        t = geom['type']
-        if t == "Polygon":
-            return is_point_in_polygon(lon, lat, geom['coordinates'][0])
-        elif t == "MultiPolygon":
-            for poly in geom['coordinates']:
-                if is_point_in_polygon(lon, lat, poly[0]):
-                    return True
-        return False
-
-    # Override database coordinates with centroids only if they are outside the polygon boundary
-    corrected_coords = []
+    # Validate and correct coordinates using Point-in-Polygon check
+    corrected_lats = []
+    corrected_lons = []
     for idx, row in df_map.iterrows():
         kab = row["Kabupaten"]
-        lat = row.get("Latitude")
-        lon = row.get("Longitude")
-        centroid = KAB_CENTROIDS.get(kab, (-7.2, 107.5))
+        lat = row["Latitude"]
+        lon = row["Longitude"]
         
-        if pd.isna(lat) or pd.isna(lon):
-            corrected_coords.append(centroid)
-        else:
-            geom = KAB_GEOMETRIES.get(kab)
-            if geom:
-                try:
-                    if is_inside_kabupaten(float(lat), float(lon), geom):
-                        corrected_coords.append((float(lat), float(lon)))
-                    else:
-                        corrected_coords.append(centroid)
-                except Exception:
-                    corrected_coords.append(centroid)
-            else:
-                corrected_coords.append((float(lat), float(lon)))
+        if pd.notna(lat) and pd.notna(lon) and kab in KAB_GEOMETRIES:
+            if not is_inside_kabupaten(lat, lon, KAB_GEOMETRIES[kab]):
+                # Fallback to centroid
+                centroid = KAB_CENTROIDS.get(kab)
+                if centroid:
+                    lat, lon = centroid
+        corrected_lats.append(lat)
+        corrected_lons.append(lon)
+        
+    df_map["Latitude"] = corrected_lats
+    df_map["Longitude"] = corrected_lons
 
-    df_map["Latitude"] = [c[0] for c in corrected_coords]
-    df_map["Longitude"] = [c[1] for c in corrected_coords]
     df_map["Suhu_Celcius"] = pd.to_numeric(df_map["Suhu_Celcius"], errors="coerce")
 
     # =========================
@@ -444,18 +441,13 @@ def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabup
         threshold=0.05,
     )
 
-    # Dynamic center based on selected kabupaten
-    lat_center = -7.2
-    lon_center = 107.5
-    zoom_level = 7.5
-    if kabupaten and kabupaten != "Semua Lokasi" and kabupaten in KAB_CENTROIDS:
-        lat_center, lon_center = KAB_CENTROIDS[kabupaten]
-        zoom_level = 8.8
-
+    # =========================
+    # 7. VIEW STATE (CENTER JAWA BARAT)
+    # =========================
     view_state = pdk.ViewState(
-        latitude=lat_center,
-        longitude=lon_center,
-        zoom=zoom_level,
+        latitude=-7.2,
+        longitude=107.5,
+        zoom=7.5,
         pitch=35,
     )
 
@@ -464,19 +456,15 @@ def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabup
     # =========================
     tooltip = {
         "html": """
-        <div style="font-size: 11px; line-height: 1.4;">
-            <b>📍 {name}</b><br/>
-            🌡️ Prediksi Suhu: {pred_suhu} °C<br/>
-            ⚠️ Prediksi Anomali: {pred_anomali} °C
-        </div>
+        <b>📍 {name}</b><br/>
+        🌡️ Suhu hari ini: {pred_suhu} °C<br/>
+        ⚠️ Anomali hari ini: {pred_anomali} °C
         """,
         "style": {
-            "backgroundColor": "rgba(15, 23, 42, 0.95)",
+            "backgroundColor": "#0f172a",
             "color": "#f1f5f9",
-            "borderRadius": "6px",
-            "padding": "6px 10px",
-            "border": "1px solid rgba(255, 255, 255, 0.15)",
-            "zIndex": "1000",
+            "borderRadius": "8px",
+            "padding": "8px",
         },
     }
 
@@ -490,7 +478,7 @@ def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabup
             tooltip=tooltip,
             map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         ),
-        width="stretch",
+        use_container_width=True,
     )
 
 
@@ -536,7 +524,7 @@ def render_trend_chart(df: pd.DataFrame, metrik: list[str]) -> None:
     fig.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.1)")
     fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.1)")
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def render_raw_data(df: pd.DataFrame) -> None:
@@ -658,13 +646,12 @@ def main() -> None:
     sheet_name = "daily_data" if model_pilihan == "ERA5 ANFIS-LSTM" else "daily_data_modis"
 
     # 3. Ambil data dengan memberikan parameter sheet_name
-    with st.spinner(f"⏳ Memuat data {model_pilihan} dari Google Sheets..."):
-        try:
-            df_raw = get_daily_data(sheet_name=sheet_name)
-            df_pred = get_predictions(sheet_name=sheet_name)
-        except Exception as e:
-            st.error(f"❌ Gagal memuat data: {e}")
-            st.stop()
+    try:
+        df_raw = get_daily_data(sheet_name=sheet_name)
+        df_pred = get_predictions(sheet_name=sheet_name)
+    except Exception as e:
+        st.error(f"❌ Gagal memuat data: {e}")
+        st.stop()
 
     # ── Sidebar Filter ───────────────────────────────────────────────────────
     lokasi, tgl_mulai, tgl_akhir, metrik = render_sidebar(df_raw)
@@ -681,7 +668,6 @@ def main() -> None:
     st.markdown("")
 
     render_prediction_cards(df_pred, lokasi)
-    st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
     render_dashboard_explanation(df_filtered, df_pred, lokasi)
     st.markdown("")
 

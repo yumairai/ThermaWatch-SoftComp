@@ -473,8 +473,7 @@ def main() -> None:
 
     # 3. Eksekusi Prediksi dengan mengirimkan parameter is_modis
     if run_btn:
-        with st.spinner("🔄 Model sedang memproses prediksi..."):
-            result = run_prediction(params, is_modis=is_modis)
+        result = run_prediction(params, is_modis=is_modis)
 
         if result is not None:
             st.markdown("""
