@@ -408,7 +408,7 @@ def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabup
             layers=[polygon_layer, heatmap_layer],
             initial_view_state=view_state,
             tooltip=tooltip,
-            map_style="mapbox://styles/mapbox/navigation-night-v1",
+            map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         ),
         use_container_width=True,
     )
