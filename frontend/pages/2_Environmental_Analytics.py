@@ -96,9 +96,15 @@ def render_sidebar_filter(df: pd.DataFrame) -> tuple:
 
         # Filter rentang tanggal
         if "Tanggal" in df.columns:
-            df["Tanggal"] = pd.to_datetime(df["Tanggal"])
-            tgl_min = df["Tanggal"].min().date()
-            tgl_max = df["Tanggal"].max().date()
+            df["Tanggal"] = pd.to_datetime(df["Tanggal"], errors="coerce")
+            tanggal_valid = df["Tanggal"].dropna()
+            if tanggal_valid.empty:
+                today = pd.Timestamp.today().normalize()
+                tgl_min = today.date()
+                tgl_max = today.date()
+            else:
+                tgl_min = tanggal_valid.min().date()
+                tgl_max = tanggal_valid.max().date()
             tgl_mulai = st.date_input("📅 Dari", value=tgl_min, min_value=tgl_min, max_value=tgl_max)
             tgl_akhir = st.date_input("📅 Sampai", value=tgl_max, min_value=tgl_min, max_value=tgl_max)
         else:

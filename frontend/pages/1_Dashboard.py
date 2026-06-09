@@ -137,9 +137,14 @@ def render_sidebar(df: pd.DataFrame) -> tuple:
         st.markdown("---")
 
         # Filter Rentang Tanggal
-        tanggal_col = pd.to_datetime(df["Tanggal"])
-        tgl_min = tanggal_col.min().date()
-        tgl_max = tanggal_col.max().date()
+        tanggal_col = pd.to_datetime(df["Tanggal"], errors="coerce").dropna()
+        if tanggal_col.empty:
+            today = pd.Timestamp.today().normalize()
+            tgl_min = today.date()
+            tgl_max = today.date()
+        else:
+            tgl_min = tanggal_col.min().date()
+            tgl_max = tanggal_col.max().date()
 
         tanggal_mulai = st.date_input("📅 Dari Tanggal", value=tgl_min, min_value=tgl_min, max_value=tgl_max)
         tanggal_akhir = st.date_input("📅 Sampai Tanggal", value=tgl_max, min_value=tgl_min, max_value=tgl_max)
@@ -225,7 +230,7 @@ def _resolve_prediction_pair(pred_df: pd.DataFrame, label: str, kabupaten: str =
         pred_norm = pred_norm[pred_norm["Kabupaten"] == kabupaten]
 
     if pred_norm.empty:
-        pred_norm = _normalize_prediction_frame(pred_df)
+        return 37.5, 0.0
 
     row = pred_norm.iloc[-1].copy()
     mapping = {

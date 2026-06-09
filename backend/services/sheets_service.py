@@ -75,7 +75,65 @@ class SheetsService:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS UNTUK STREAMLIT FRONTEND
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════════
+
+
+def _fallback_daily_data():
+    """Gunakan data lokal bila credential Google Sheets tidak tersedia di deployment."""
+    candidate_paths = [
+        "data/Dataset_Master_ERA5_Ready_LSTM.csv",
+        "data/Dataset_(Jan,2014-Mei,2026).csv",
+        "backend/data/Dataset_Master_ERA5_Ready_LSTM.csv",
+        "backend/data/Dataset_(Jan,2014-Mei,2026).csv",
+    ]
+
+    for path in candidate_paths:
+        if not os.path.exists(path):
+            continue
+
+        df = pd.read_csv(path)
+        rename_dict = {
+            "date": "Tanggal",
+            "Kabupaten": "Kabupaten",
+            "ERA5_LST_Mean": "Suhu_Celcius",
+            "MODIS_LST_Mean": "Suhu_Celcius",
+            "LST_Mean": "Suhu_Celcius",
+            "SoilMoisture_Daily_Mean": "Soil_Moisture",
+            "SoilMoisture_acc": "Soil_Moisture",
+            "NDVI_8Day_Mean": "NDVI",
+            "NDVI": "NDVI",
+            "LST_Anomaly": "Anomaly",
+            "ERA5_Max_Lat": "Latitude",
+            "ERA5_Max_Lon": "Longitude",
+            "MODIS_Max_Lat": "Latitude",
+            "MODIS_Max_Lon": "Longitude",
+            "Elevation_m": "Elevation",
+        }
+
+        df = df.rename(columns=rename_dict)
+        df = df.loc[:, ~df.columns.duplicated(keep="first")]
+        if "Tanggal" not in df.columns and "date" in df.columns:
+            df["Tanggal"] = pd.to_datetime(df["date"], errors="coerce")
+        if "Tanggal" in df.columns:
+            df["Tanggal"] = pd.to_datetime(df["Tanggal"], errors="coerce")
+        if "Suhu_Celcius" not in df.columns:
+            for col in ["ERA5_LST_Mean", "MODIS_LST_Mean", "LST_Mean"]:
+                if col in df.columns:
+                    df["Suhu_Celcius"] = pd.to_numeric(df[col], errors="coerce")
+                    break
+
+        numeric_cols = ["Suhu_Celcius", "Soil_Moisture", "NDVI", "Anomaly", "Elevation", "Latitude", "Longitude"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        if "Kabupaten" in df.columns:
+            df["Kabupaten"] = df["Kabupaten"].astype(str).str.title()
+
+        return df
+
+    return pd.DataFrame(columns=["Tanggal", "Kabupaten", "Suhu_Celcius", "Soil_Moisture", "NDVI", "Anomaly", "Latitude", "Longitude"])
+
 
 def get_daily_data(sheet_name="daily_data"):
     """Fungsi helper untuk membaca data harian dari Google Sheets dan memetakan kolomnya."""
@@ -119,8 +177,7 @@ def get_daily_data(sheet_name="daily_data"):
         return df
     except Exception as e:
         print(f"[Sheets Helper] Gagal mengambil data harian: {e}")
-        # Kembalikan DataFrame kosong dengan kolom yang dibutuhkan agar tidak crash
-        return pd.DataFrame(columns=["Tanggal", "Kabupaten", "Suhu_Celcius", "Soil_Moisture", "NDVI", "Anomaly", "Latitude", "Longitude"])
+        return _fallback_daily_data()
 
 
 def get_predictions(sheet_name="daily_data"):
