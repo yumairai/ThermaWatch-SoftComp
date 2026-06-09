@@ -21,21 +21,26 @@ def calculate_features(df_window, elevasi_dict, historical_means, is_modis=False
     elevation = elevasi_dict.get(kabupaten, 300.0)  # Default 300m jika tidak terdaftar
     df['Elevation_m'] = elevation
 
-    # 2. Delta-scaling for ERA5 LST variables using GFS_Temp if GFS is present
+    # 2. Delta-scaling for LST variables using GFS_Temp if GFS is present
     if 'GFS_Temp' in df.columns:
         # Interpolate GFS_Temp first
         df['GFS_Temp'] = df['GFS_Temp'].interpolate(method='linear').ffill().bfill()
         
-        # Find the last row with valid ERA5_LST_Mean before we interpolate
-        non_null_era5 = df[df['ERA5_LST_Mean'].notna()]
-        if not non_null_era5.empty:
-            anchor_idx = non_null_era5.index[-1]
+        # Tentukan kolom LST utama yang akan di-scaling
+        lst_mean_col = 'MODIS_LST_Mean' if is_modis else 'ERA5_LST_Mean'
+        lst_max_col = 'MODIS_LST_Max' if is_modis else 'ERA5_LST_Max'
+        lst_p95_col = 'MODIS_LST_Percentile95' if is_modis else 'ERA5_LST_Percentile95'
+        
+        # Cari baris terakhir yang memiliki nilai LST valid sebelum di-interpolasi
+        non_null_lst = df[df[lst_mean_col].notna()]
+        if not non_null_lst.empty:
+            anchor_idx = non_null_lst.index[-1]
             anchor_gfs = df.loc[anchor_idx, 'GFS_Temp']
             
-            # Apply GFS delta for rows after the anchor
+            # Terapkan GFS delta untuk baris-baris setelah anchor
             for idx in df.index[anchor_idx + 1:]:
                 delta = df.loc[idx, 'GFS_Temp'] - anchor_gfs
-                for col in ['ERA5_LST_Mean', 'ERA5_LST_Max', 'ERA5_LST_Percentile95']:
+                for col in [lst_mean_col, lst_max_col, lst_p95_col]:
                     if col in df.columns and pd.isna(df.loc[idx, col]):
                         anchor_val = df.loc[anchor_idx, col]
                         if pd.notna(anchor_val) and anchor_val != -9999.0:

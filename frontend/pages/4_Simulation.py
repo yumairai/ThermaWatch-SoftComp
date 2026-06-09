@@ -107,14 +107,14 @@ def render_input_form() -> dict:
             "Suhu Hari Ini (T) °C",
             min_value=20.0,
             max_value=60.0,
-            value=35.0,
+            value=34.5,
             step=0.5,
             format="%.1f",
             help="Suhu target / hari terakhir dalam window simulasi."
         )
         lst_history_str = st.text_area(
             "Suhu Historis (T-13 s/d T-1) °C",
-            value="35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0, 35.0",
+            value="31.2, 31.5, 32.0, 31.8, 32.5, 33.1, 32.7, 33.3, 33.8, 34.2, 33.9, 34.1, 34.3",
             help="Masukkan tepat 13 nilai suhu dipisahkan dengan koma untuk historis sebelum hari ini."
         )
         try:
@@ -323,7 +323,7 @@ def render_prediction_chart(result: dict) -> None:
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.1)")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_input_summary(params: dict) -> None:
@@ -356,6 +356,94 @@ def render_input_summary(params: dict) -> None:
 # FUNGSI UTAMA
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def render_explanation(params: dict, result: dict) -> None:
+    """Menampilkan analisis logis mengapa model memproyeksikan nilai tersebut (Explainable AI)."""
+    with st.expander("🔍 Analisis Faktor Prediksi (Explainable AI)", expanded=True):
+        # Ambil rata-rata historis bulanan
+        from pathlib import Path
+        import json
+        baselines_path = Path(__file__).parents[2] / "backend" / "config" / "baselines.json"
+        hist_mean = 30.0  # Fallback default
+        if baselines_path.exists():
+            try:
+                with open(baselines_path, "r") as f:
+                    baselines = json.load(f)
+                    hist_means = baselines.get("historical_means", {})
+                    kab_means = hist_means.get(params["kabupaten"].lower().strip(), {})
+                    hist_mean = kab_means.get(str(params["month"]), 30.0)
+            except Exception:
+                pass
+
+        lst_mean_list = params.get("lst_mean_list", [])
+        last_lst = lst_mean_list[-1] if len(lst_mean_list) > 0 else 30.0
+        diff_lst = last_lst - hist_mean
+        
+        # 1. Analisis Suhu (LST)
+        if diff_lst > 1.5:
+            lst_val = "🔴 Tren Panas Tinggi"
+            lst_exp = f"Suhu input ({last_lst:.1f}°C) jauh lebih tinggi (+{diff_lst:.1f}°C) dibanding rata-rata historis bulanan ({hist_mean:.1f}°C)."
+        elif diff_lst < -1.5:
+            lst_val = "❄️ Tren Dingin"
+            lst_exp = f"Suhu input ({last_lst:.1f}°C) berada di bawah rata-rata historis bulanan ({hist_mean:.1f}°C)."
+        else:
+            lst_val = "🟢 Normal"
+            lst_exp = f"Suhu input ({last_lst:.1f}°C) stabil mendekati rata-rata historis bulanan ({hist_mean:.1f}°C)."
+
+        # 2. Analisis Kelembaban Tanah (Soil Moisture)
+        sm = params["soil_moisture"]
+        if sm < 20.0:
+            sm_val = "🔴 Sangat Kering"
+            sm_exp = f"Kelembaban tanah rendah ({sm:.1f}%) membatasi pendinginan evaporatif permukaan tanah."
+        elif sm < 40.0:
+            sm_val = "🟡 Sedang"
+            sm_exp = f"Kelembaban tanah ({sm:.1f}%) berada pada level sedang/normal."
+        else:
+            sm_val = "🟢 Lembab / Basah"
+            sm_exp = f"Kelembaban tinggi ({sm:.1f}%) meningkatkan kapasitas redam panas permukaan tanah."
+
+        # 3. Analisis Kerapatan Vegetasi (NDVI)
+        ndvi = params["ndvi"]
+        if ndvi < 0.2:
+            ndvi_val = "🔴 Lahan Terbuka"
+            ndvi_exp = f"Indeks NDVI sangat rendah ({ndvi:.2f}) mencerminkan ketiadaan kanopi peneduh vegetasi."
+        elif ndvi < 0.6:
+            ndvi_val = "🟡 Vegetasi Sedang"
+            ndvi_exp = f"Tingkat vegetasi sedang ({ndvi:.2f}) memberikan perlindungan termal campuran."
+        else:
+            ndvi_val = "🟢 Vegetasi Lebat"
+            ndvi_exp = f"NDVI tinggi ({ndvi:.2f}) memberikan efek peneduh dan pendinginan alami maksimal."
+
+        # 4. Ketinggian (Elevasi)
+        elev = params["elevation"]
+        if elev > 1000:
+            elev_val = "🏔️ Dataran Tinggi"
+            elev_exp = f"Elevasi ({elev} mdpl) memicu penurunan suhu udara baseline secara meteorologis."
+        else:
+            elev_val = "🏖️ Dataran Rendah"
+            elev_exp = f"Elevasi rendah ({elev} mdpl) cenderung menahan fluktuasi panas dasar lingkungan."
+
+        rows = [
+            ("Suhu Permukaan (LST)", lst_val, lst_exp),
+            ("Kelembaban Tanah", sm_val, sm_exp),
+            ("Kerapatan Vegetasi (NDVI)", ndvi_val, ndvi_exp),
+            ("Elevasi Wilayah", elev_val, elev_exp),
+        ]
+
+        xai_html = '<div class="sim-card">'
+        for label, status, detail in rows:
+            xai_html += (
+                '<div class="param-summary-row" style="flex-direction: column; align-items: flex-start; padding: 10px 0;">'
+                '<div style="display: flex; justify-content: space-between; width: 100%; font-weight: 700;">'
+                f'<span style="color: #94a3b8; font-size: 0.88rem;">{label}</span>'
+                f'<span style="color: #f1f5f9; font-size: 0.88rem;">{status}</span>'
+                '</div>'
+                f'<div style="font-size: 0.82rem; color: #64748b; margin-top: 4px;">{detail}</div>'
+                '</div>'
+            )
+        xai_html += "</div>"
+        st.markdown(xai_html, unsafe_allow_html=True)
+
+
 def main() -> None:
     """Entry point halaman Simulasi."""
     render_header()
@@ -378,7 +466,7 @@ def main() -> None:
         run_btn = st.button(
             "🚀 Run Prediction",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     st.divider()
@@ -397,6 +485,7 @@ def main() -> None:
 
             render_result_cards(result)
             render_prediction_chart(result)
+            render_explanation(params, result)
             render_input_summary(params)
 
     else:

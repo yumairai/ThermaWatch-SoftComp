@@ -227,7 +227,7 @@ def render_time_series_charts(df: pd.DataFrame, kolom: list[str]) -> None:
     fig.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.08)")
     fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.08)")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_correlation_heatmap(df: pd.DataFrame) -> None:
@@ -271,7 +271,7 @@ def render_correlation_heatmap(df: pd.DataFrame) -> None:
         yaxis=dict(tickfont=dict(size=11)),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     st.caption("Korelasi berkisar dari -1 (berbanding terbalik) hingga +1 (berbanding lurus).")
 
 
@@ -319,7 +319,7 @@ def render_histograms(df: pd.DataFrame, kolom: list[str]) -> None:
             fig.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.08)")
             fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.08)")
             with cols[j]:
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
 
 def render_summary_table(df: pd.DataFrame, kolom: list[str]) -> None:
@@ -336,7 +336,7 @@ def render_summary_table(df: pd.DataFrame, kolom: list[str]) -> None:
 
     st.dataframe(
         desc,
-        use_container_width=True,
+        width="stretch",
         height=250,
     )
 

@@ -410,7 +410,7 @@ def render_gis_map(df: pd.DataFrame, pred_df: pd.DataFrame, geojson: dict, kabup
             tooltip=tooltip,
             map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         ),
-        use_container_width=True,
+        width="stretch",
     )
 
 
@@ -456,7 +456,7 @@ def render_trend_chart(df: pd.DataFrame, metrik: list[str]) -> None:
     fig.update_xaxes(showgrid=True, gridcolor="rgba(148,163,184,0.1)")
     fig.update_yaxes(showgrid=True, gridcolor="rgba(148,163,184,0.1)")
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def render_raw_data(df: pd.DataFrame) -> None:
@@ -465,7 +465,7 @@ def render_raw_data(df: pd.DataFrame) -> None:
         st.markdown(f"**Total baris:** {len(df):,} | **Total kolom:** {len(df.columns)}")
         st.dataframe(
             df.reset_index(drop=True),
-            use_container_width=True,
+            width="stretch",
             height=300,
         )
         st.download_button(
@@ -476,9 +476,91 @@ def render_raw_data(df: pd.DataFrame) -> None:
         )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FUNGSI UTAMA
-# ═══════════════════════════════════════════════════════════════════════════════
+def render_dashboard_explanation(df_filtered: pd.DataFrame, pred_df: pd.DataFrame, lokasi: str) -> None:
+    """Menampilkan analisis kontributor prediksi untuk lokasi terpilih (XAI)."""
+    if lokasi == "Semua Lokasi":
+        return
+
+    with st.expander("🔍 Analisis Faktor Prediksi (Explainable AI)", expanded=True):
+        # Ambil record terbaru untuk lokasi tersebut
+        latest_row = df_filtered.iloc[-1]
+        
+        # Ambil nilai parameter aktual saat ini
+        lst_val = latest_row.get("Suhu_Celcius", 30.0)
+        anom_val = latest_row.get("Anomaly", 0.0)
+        sm_val = latest_row.get("Soil_Moisture", 30.0)
+        ndvi_val = latest_row.get("NDVI", 0.4)
+        elev_val = latest_row.get("Elevation", 500)
+        
+        # Rata-rata historis bulanan = Suhu aktual - Anomali aktual
+        hist_mean = lst_val - anom_val
+        
+        # 1. Analisis Suhu (LST)
+        if anom_val > 1.5:
+            lst_val_txt = "🔴 Anomali Panas Aktif"
+            lst_exp = f"Suhu saat ini ({lst_val:.1f}°C) berada signifikan (+{anom_val:+.1f}°C) di atas rata-rata historis ({hist_mean:.1f}°C)."
+        elif anom_val < -1.5:
+            lst_val_txt = "❄️ Anomali Dingin"
+            lst_exp = f"Suhu saat ini ({lst_val:.1f}°C) berada di bawah rata-rata historis bulanan ({hist_mean:.1f}°C)."
+        else:
+            lst_val_txt = "🟢 Normal"
+            lst_exp = f"Suhu permukaan tanah saat ini stabil mendekati rata-rata historis bulanan ({hist_mean:.1f}°C)."
+
+        # 2. Analisis Kelembaban Tanah (Soil Moisture)
+        sm_display = sm_val
+        if sm_val <= 1.0:
+            sm_display = sm_val * 100
+            
+        if sm_display < 20.0:
+            sm_val_txt = "🔴 Sangat Kering"
+            sm_exp = f"Kelembaban tanah rendah ({sm_display:.1f}%) membatasi pendinginan permukaan tanah alami."
+        elif sm_display < 40.0:
+            sm_val_txt = "🟡 Sedang"
+            sm_exp = f"Kelembaban tanah ({sm_display:.1f}%) berada pada level sedang/normal."
+        else:
+            sm_val_txt = "🟢 Lembab / Basah"
+            sm_exp = f"Kelembaban tanah basah ({sm_display:.1f}%) meredam kenaikan suhu ekstrem secara efektif."
+
+        # 3. Analisis NDVI
+        if ndvi_val < 0.2:
+            ndvi_val_txt = "🔴 Lahan Terbuka"
+            ndvi_exp = f"Indeks NDVI sangat rendah ({ndvi_val:.2f}) mencerminkan dominasi area gundul penyerap panas matahari."
+        elif ndvi_val < 0.6:
+            ndvi_val_txt = "🟡 Vegetasi Sedang"
+            ndvi_exp = f"Tingkat vegetasi sedang ({ndvi_val:.2f}) memberikan perlindungan termal campuran."
+        else:
+            ndvi_val_txt = "🟢 Vegetasi Lebat"
+            ndvi_exp = f"Kanopi vegetasi lebat ({ndvi_val:.2f}) memaksimalkan evapotranspirasi alami untuk mendinginkan area."
+
+        # 4. Ketinggian (Elevasi)
+        if elev_val > 1000:
+            elev_val_txt = "🏔️ Dataran Tinggi"
+            elev_exp = f"Ketinggian wilayah ({elev_val:.0f} mdpl) secara alami menurunkan baseline suhu."
+        else:
+            elev_val_txt = "🏖️ Dataran Rendah"
+            elev_exp = f"Ketinggian rendah ({elev_val:.0f} mdpl) cenderung menahan suhu dasar lingkungan yang lebih hangat."
+
+        rows = [
+            ("Suhu Permukaan (LST)", lst_val_txt, lst_exp),
+            ("Kelembaban Tanah", sm_val_txt, sm_exp),
+            ("Kerapatan Vegetasi (NDVI)", ndvi_val_txt, ndvi_exp),
+            ("Elevasi Wilayah", elev_val_txt, elev_exp),
+        ]
+
+        xai_html = '<div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.15); border-radius: 12px; padding: 20px; margin-bottom: 12px;">'
+        for label, status, detail in rows:
+            xai_html += (
+                '<div style="display: flex; flex-direction: column; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid rgba(148,163,184,0.1);">'
+                '<div style="display: flex; justify-content: space-between; width: 100%; font-weight: 700;">'
+                f'<span style="color: #94a3b8; font-size: 0.88rem;">{label}</span>'
+                f'<span style="color: #f1f5f9; font-size: 0.88rem;">{status}</span>'
+                '</div>'
+                f'<div style="font-size: 0.82rem; color: #64748b; margin-top: 4px;">{detail}</div>'
+                '</div>'
+            )
+        xai_html += "</div>"
+        st.markdown(xai_html, unsafe_allow_html=True)
+
 
 def main() -> None:
     """Entry point halaman Dashboard."""
@@ -519,6 +601,8 @@ def main() -> None:
     st.markdown("")
 
     render_prediction_cards(df_pred, lokasi)
+    st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
+    render_dashboard_explanation(df_filtered, df_pred, lokasi)
     st.markdown("")
 
     if "horizon" not in st.session_state:
