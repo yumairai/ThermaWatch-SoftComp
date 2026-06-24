@@ -4,26 +4,24 @@ ThermaWatch adalah aplikasi berbasis web interaktif untuk memproyeksikan Suhu Pe
 
 ---
 
-## Fitur Utama
+## Apa yang Bisa Anda Lakukan dan Lihat di Aplikasi Ini?
 
-### 1. Interactive Dashboard & GIS Map
-- Visualisasi Anomali Real-time: Peta GIS Kabupaten/Kota Jawa Barat interaktif dengan sinkronisasi hover antartabel dan peta.
-- KPI Real-time: Ringkasan kondisi suhu rata-rata, tingkat kelembaban, dan indeks vegetasi (NDVI).
-- Dual-Model Support: Memungkinkan pengguna untuk beralih antara data sensor ERA5 dan MODIS.
+### 1. Dashboard Interaktif & Peta Pemantauan Suhu
+- Memantau Peta Sebaran Panas: Anda akan melihat peta interaktif Provinsi Jawa Barat. Titik atau warna pada peta menunjukkan lokasi anomali suhu (misalnya area yang memanas secara ekstrem).
+- Memeriksa Indikator Utama (KPI): Di layar utama, Anda akan langsung disajikan panel ringkasan kondisi suhu rata-rata terkini, tingkat kelembaban tanah, dan indeks vegetasi.
+- Memilih Sumber Data Satelit: Anda bebas mengganti mode pembacaan data sensor dari satelit ERA5 ke MODIS (atau sebaliknya) untuk membandingkan informasi.
 
-### 2. Environmental Analytics
-- Heatmap Korelasi: Analisis hubungan antar-variabel meteorologi (LST, Soil Moisture, NDVI, Elevasi).
-- Distribusi Variabel: Histogram interaktif dengan garis rata-rata untuk melihat pola data.
-- Statistik Deskriptif: Tabel ringkasan statistik yang lengkap untuk analisis mendalam.
+### 2. Analisis Lingkungan (Environmental Analytics)
+- Membaca Pola Hubungan Faktor Alam: Anda bisa melihat grafik korelasi (Heatmap) yang memperjelas seberapa kuat pengaruh kepadatan vegetasi, elevasi, dan kelembaban tanah terhadap peningkatan suhu permukaan.
+- Melihat Sebaran Data Harian: Tersedia grafik histogram interaktif untuk meninjau distribusi dan tren data meteorologi dari waktu ke waktu.
 
-### 3. Model Information & Architecture
-- Diagram Aliran Paralel: Visualisasi interaktif arsitektur model Dual-Branch ANFIS-LSTM yang menunjukkan aliran Forward Pass dan proses Update Weight secara paralel selama Backward Pass.
-- Metrik Evaluasi: Metrik performa uji komparatif (RMSE, MAE, R2) untuk berbagai horizon prediksi (H+1, H+3, H+7).
-- Detail Dataset: Informasi lengkap dataset latih yang terdiri dari sampel satelit cuaca (MODIS dan ERA5).
+### 3. Informasi Arsitektur Model AI
+- Mempelajari Cara Kerja AI: Terdapat diagram interaktif yang memperlihatkan dengan jelas bagaimana sistem AI memproses data waktu (Temporal) dan data alam (Lingkungan) secara bersamaan.
+- Memeriksa Tingkat Akurasi Prediksi: Anda bisa melihat tabel nilai akurasi (seperti RMSE dan MAE) untuk menilai seberapa presisi prediksi AI dalam memproyeksikan suhu 1, 3, hingga 7 hari ke depan.
 
-### 4. Simulation & Explainable AI (XAI)
-- What-If Analysis: Pengguna dapat memanipulasi parameter lingkungan secara manual (LST, Kelembaban Tanah, NDVI, Elevasi, Bulan) untuk melihat proyeksi suhu mendatang.
-- Explainable AI (XAI): Panel dropdown penjelasan faktor prediksi yang menjabarkan kontribusi logika meteorologis di balik proyeksi model.
+### 4. Simulasi Mandiri & Penjelasan Logika AI
+- Melakukan Eksperimen Prediksi Sendiri (What-If): Anda dapat bereksperimen dengan memasukkan angka buatan sendiri (misalnya mengubah kelembaban menjadi sangat kering atau menaikkan suhu awal). Sistem akan langsung memproyeksikan suhu di masa depan.
+- Membaca Alasan Prediksi (Explainable AI): Setelah prediksi muncul, aplikasi akan menyajikan penjelasan naratif dan logis mengenai mengapa suhu tersebut diprediksi naik atau turun (contoh: prediksi suhu menjadi tinggi karena sistem mendeteksi ketiadaan pohon penyejuk dan kelembaban yang sangat rendah).
 
 ---
 
