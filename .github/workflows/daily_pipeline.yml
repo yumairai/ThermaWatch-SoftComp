@@ -56,7 +56,7 @@ jobs:
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        git add data/Dataset_Master_ERA5_Ready_LSTM.csv "data/Dataset_(Jan,2014-Mei,2026).csv"
+        git add data/Dataset_Master_ERA5_Ready_LSTM.csv "data/Dataset_Master_Modis_Ready_LSTM.csv"
         git commit -m "chore: auto-update local databases (ERA5 & MODIS) for $(date +'%Y-%m-%d')" || exit 0
         git pull --rebase https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git main
         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main

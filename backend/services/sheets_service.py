@@ -96,9 +96,9 @@ def _fallback_daily_data():
     """Gunakan data lokal bila credential Google Sheets tidak tersedia di deployment."""
     candidate_paths = [
         "data/Dataset_Master_ERA5_Ready_LSTM.csv",
-        "data/Dataset_(Jan,2014-Mei,2026).csv",
+        "data/Dataset_Master_Modis_Ready_LSTM.csv",
         "backend/data/Dataset_Master_ERA5_Ready_LSTM.csv",
-        "backend/data/Dataset_(Jan,2014-Mei,2026).csv",
+        "backend/data/Dataset_Master_Modis_Ready_LSTM.csv",
     ]
 
     for path in candidate_paths:

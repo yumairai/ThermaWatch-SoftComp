@@ -36,7 +36,7 @@ def run_daily_pipeline(target_date_str=None):
     
     # 3. Load Database Lokal
     local_db_era5_path = 'data/Dataset_Master_ERA5_Ready_LSTM.csv'
-    local_db_modis_path = 'data/Dataset_(Jan,2014-Mei,2026).csv'
+    local_db_modis_path = 'data/Dataset_Master_Modis_Ready_LSTM.csv'
     
     if not os.path.exists(local_db_era5_path):
         raise FileNotFoundError(f"Database lokal ERA5 '{local_db_era5_path}' tidak ditemukan.")

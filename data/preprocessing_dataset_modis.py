@@ -168,8 +168,8 @@ df_master = df_master.dropna(subset=['Target_Anomali_H1', 'Target_Anomali_H3', '
 # ----------------------------------------
 
 # Ekspor hasil pengerjaan ke file master CSV baru
-df_master.to_csv('Dataset_(Jan,2014-Mei,2026).csv', index=False)
+df_master.to_csv('Dataset_Master_Modis_Ready_LSTM.csv', index=False)
 
 print("\n=== PROSES PREPROCESSING RE-RUN SELESAI SEMPURNA ===")
 print(f"📅 Rentang Data Aktual Baru: {df_master['date'].min().strftime('%Y-%m-%d')} s/d {df_master['date'].max().strftime('%Y-%m-%d')}")
-print("File 'Dataset_(Jan,2014-Mei,2026).csv' siap dimasukkan ke training model AI ThermaWatch!")
+print("File 'Dataset_Master_Modis_Ready_LSTM.csv' siap dimasukkan ke training model AI ThermaWatch!")
